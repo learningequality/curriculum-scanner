@@ -8,7 +8,10 @@ import os
 from google.cloud import vision
 from google.cloud.vision import types
 from google.oauth2 import service_account
+
+# Other imports
 from progress.bar import Bar
+import numpy as np
 
 from pdf_reader import PDFParser
 from config import STRUCTURE, WRITE_DIRECTORY
@@ -74,19 +77,63 @@ def convert_image_data_to_dict(item, structure):
 def write_block_data(filepath, filename, directory):
   block_file_path = os.path.sep.join([directory, '{}_ocr.json'.format(filename)])
 
-  if os.path.exists(block_file_path):
-    return block_file_path
+  # if os.path.exists(block_file_path):
+  #   return block_file_path
 
   with open(filepath, 'rb') as image_file:
     content = image_file.read()
   image = types.Image(content=content)
   response = CLIENT.text_detection(image=image)
-  data = convert_image_data_to_dict(response.full_text_annotation, STRUCTURE)
+  image_data = response.full_text_annotation
+  data = convert_image_data_to_dict(image_data, STRUCTURE)
 
   with open(block_file_path, 'wb') as fobj:
     fobj.write(json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8'))
 
-  return block_file_path
+  return {
+    "columns": 1,
+    "orientation": detect_orientation(response.text_annotations),
+    "file": block_file_path,
+    "image": filepath
+  }
+
+def detect_orientation(annotations):
+  for annotation in annotations[1:]:  # Skip first item as it contains the whole sentence
+    if len(annotation.description) > 10:  # 10 characters minimum seems to return more accurate results
+      break;
+
+  center_x = np.mean([v.x for v in annotation.bounding_poly.vertices])
+  center_y = np.mean([v.y for v in annotation.bounding_poly.vertices])
+
+  first_point = annotation.bounding_poly.vertices[0]
+
+  if first_point.x < center_x:
+    if first_point.y < center_y:
+      return 0
+    else:
+      return 270
+  else:
+    if first_point.y < center_y:
+      return 90
+    else:
+      return 180
+
+def detect_number_of_columns():
+  import pdb; pdb.set_trace()
+
+def generate_images_from_pdf(filepath, file_id, directory):
+  images = []
+  with PDFParser(filepath) as parser:
+    # Write page images to image file
+    bar = Bar('Converting pages to images', max=parser.get_num_pages())
+    for index, image in enumerate(parser.get_next_page()):
+      image_path = os.path.sep.join([directory, "{}-{}.png".format(file_id, index)])
+      if not os.path.exists(image_path):
+        image.save(image_path)
+      images.append(image_path)
+      bar.next()
+    bar.finish()
+  return images
 
 def process_scan(filepath):
   print('Processing {}'.format(filepath))
@@ -103,17 +150,7 @@ def process_scan(filepath):
   # Get images
   images = []
   if ext.lower() == '.pdf':  # Parse pdfs
-    with PDFParser(filepath) as parser:
-      # Write page images to image file
-      bar = Bar('Converting pages to images', max=parser.get_num_pages())
-      for index, image in enumerate(parser.get_next_page()):
-        image_path = os.path.sep.join([directory, "{}-{}.png".format(file_id, index)])
-        if not os.path.exists(image_path):
-          image.save(image_path)
-        images.append(image_path)
-        bar.next()
-      bar.finish()
-
+    images = generate_images_from_pdf(filepath, file_id, directory)
   else:  # Parse images
     images = [filepath]
 
@@ -122,12 +159,8 @@ def process_scan(filepath):
   bar = Bar('Writing page data', max=len(images))
   for index, image_path in enumerate(images):
     # Write block data to file
-    block_file_path = write_block_data(image_path, '{}-{}'.format(file_id, index), directory)
-    index_data.append({
-      "columns": 1,
-      "orientation": 0,
-      "file": block_file_path
-    })
+    block_data = write_block_data(image_path, '{}-{}'.format(file_id, index), directory)
+    index_data.append(block_data)
     bar.next()
   bar.finish()
 
@@ -137,22 +170,3 @@ def process_scan(filepath):
   print('DONE: data written to {}'.format(directory))
 
 process_scan(os.path.abspath('tests/base.pdf'))
-# def get_orientation(word):
-#   if len(word.symbols) < MIN_WORD_LENGTH_FOR_ROTATION_INFERENCE:
-#       continue
-#   first_char = word.symbols[0]
-#   last_char = word.symbols[-1]
-#   first_char_center = (np.mean([v.x for v in first_char.bounding_box.vertices]),np.mean([v.y for v in first_char.bounding_box.vertices]))
-#   last_char_center = (np.mean([v.x for v in last_char.bounding_box.vertices]),np.mean([v.y for v in last_char.bounding_box.vertices]))
-
-#   #upright or upside down
-#   if np.abs(first_char_center[1] - last_char_center[1]) < np.abs(top_right.y - bottom_right.y):
-#     if first_char_center[0] <= last_char_center[0]: #upright
-#       print 0
-#     else: #updside down
-#       print 180
-#   else: #sideways
-#     if first_char_center[1] <= last_char_center[1]:
-#       print 90
-#     else:
-#       print 270
