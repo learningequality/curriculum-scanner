@@ -14,7 +14,7 @@ from progress.bar import Bar
 import numpy as np
 
 from pdf_reader import PDFParser
-from config import STRUCTURE, WRITE_DIRECTORY
+from config import STRUCTURE, WRITE_DIRECTORY, ORIENTATION_DETECTION_THRESHOLD
 
 # Instantiates a client
 credentials = service_account.Credentials.from_service_account_file('credentials/client_secret.json')
@@ -99,7 +99,7 @@ def write_block_data(filepath, filename, directory):
 
 def detect_orientation(annotations):
   for annotation in annotations[1:]:  # Skip first item as it contains the whole sentence
-    if len(annotation.description) > 10:  # 10 characters minimum seems to return more accurate results
+    if len(annotation.description) > ORIENTATION_DETECTION_THRESHOLD:
       break;
 
   center_x = np.mean([v.x for v in annotation.bounding_poly.vertices])
