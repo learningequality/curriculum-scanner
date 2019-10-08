@@ -16,7 +16,7 @@ import numpy as np
 from PIL import Image
 
 from pdf_reader import PDFParser
-from config import STRUCTURE, WRITE_DIRECTORY, ORIENTATION_DETECTION_THRESHOLD
+from config import STRUCTURE, WRITE_DIRECTORY, ORIENTATION_DETECTION_THRESHOLD, COLUMN_DETECTION_THRESHOLD
 
 # Instantiates a client
 credentials = service_account.Credentials.from_service_account_file('credentials/client_secret.json')
@@ -139,7 +139,7 @@ def write_block_data(filepath, filename, directory):
 
 
 def detect_number_of_columns(image_data):
-  number_of_columns = 0
+  ranges = []
   for page in image_data.pages:
     max_y = 0
     max_x = 0
@@ -147,13 +147,26 @@ def detect_number_of_columns(image_data):
       string = ''
       for paragraph in block.paragraphs:
         for word in paragraph.words:
+          w = ''
           for symbol in word.symbols:
-            string += symbol.text
-      print("String: ", string.strip())
+            w += symbol.text
+          string += w + ' '
 
-      print(block.bounding_box.vertices[0].x,  block.bounding_box.vertices[-2].x, block.bounding_box.vertices[0].y, block.bounding_box.vertices[-2].y)
+      x0 = block.bounding_box.vertices[0].x - COLUMN_DETECTION_THRESHOLD
+      x1 = block.bounding_box.vertices[-2].x + COLUMN_DETECTION_THRESHOLD
 
-  return number_of_columns
+      range_found = False
+      for index, r in enumerate(ranges):
+        intersection = list(set(range(r[0], r[1])) & set(range(x0, x1)))
+        if len(intersection):
+          range_found = True
+          ranges[index] = (min(r[0], x0), max(r[1], x1))
+          break;
+
+      if not range_found:
+        ranges.append((x0, x1))
+
+  return len(ranges)
 
 def generate_images_from_pdf(filepath, file_id, directory):
   images = []
@@ -194,7 +207,7 @@ def process_scan(filepath):
   # Generate data
   index_data = []
   bar = Bar('Writing page data', max=len(images))
-  for index, image_path in enumerate(images[:1]):
+  for index, image_path in enumerate(images):
     # Write block data to file
     block_data = write_block_data(image_path, '{}-{}'.format(file_id, index), directory)
     index_data.append(block_data)

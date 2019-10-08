@@ -41,3 +41,4 @@ STRUCTURE = {
 
 WRITE_DIRECTORY = 'scans'
 ORIENTATION_DETECTION_THRESHOLD = 10  # 10 characters minimum returns more accurate results
+COLUMN_DETECTION_THRESHOLD = 15
