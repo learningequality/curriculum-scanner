@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 
 # Imports the Google Cloud client library
 from google.cloud import vision
@@ -12,6 +13,7 @@ from google.oauth2 import service_account
 # Other imports
 from progress.bar import Bar
 import numpy as np
+from PIL import Image
 
 from pdf_reader import PDFParser
 from config import STRUCTURE, WRITE_DIRECTORY, ORIENTATION_DETECTION_THRESHOLD
@@ -73,30 +75,6 @@ def convert_image_data_to_dict(item, structure):
     ]
   return data
 
-
-def write_block_data(filepath, filename, directory):
-  block_file_path = os.path.sep.join([directory, '{}_ocr.json'.format(filename)])
-
-  # if os.path.exists(block_file_path):
-  #   return block_file_path
-
-  with open(filepath, 'rb') as image_file:
-    content = image_file.read()
-  image = types.Image(content=content)
-  response = CLIENT.text_detection(image=image)
-  image_data = response.full_text_annotation
-  data = convert_image_data_to_dict(image_data, STRUCTURE)
-
-  with open(block_file_path, 'wb') as fobj:
-    fobj.write(json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8'))
-
-  return {
-    "columns": 1,
-    "orientation": detect_orientation(response.text_annotations),
-    "file": block_file_path,
-    "image": filepath
-  }
-
 def detect_orientation(annotations):
   for annotation in annotations[1:]:  # Skip first item as it contains the whole sentence
     if len(annotation.description) > ORIENTATION_DETECTION_THRESHOLD:
@@ -118,8 +96,64 @@ def detect_orientation(annotations):
     else:
       return 180
 
-def detect_number_of_columns():
-  import pdb; pdb.set_trace()
+
+def rotate_image(filepath):
+  with open(filepath, 'rb') as image_file:
+    content = image_file.read()
+  image = types.Image(content=content)
+  response = CLIENT.text_detection(image=image)
+  orientation = detect_orientation(response.text_annotations)
+
+  if orientation != 0:
+    with Image.open(filepath) as image:
+      rotated = image.rotate(orientation, expand=1)
+      rotated.save(filepath)
+
+  return orientation
+
+
+def write_block_data(filepath, filename, directory):
+  block_file_path = os.path.sep.join([directory, '{}_ocr.json'.format(filename)])
+
+  # if os.path.exists(block_file_path):
+  #   return block_file_path
+
+  rotate_image(filepath)
+
+  with open(filepath, 'rb') as image_file:
+    content = image_file.read()
+  image = types.Image(content=content)
+  response = CLIENT.text_detection(image=image)
+
+  image_data = response.full_text_annotation
+  data = convert_image_data_to_dict(image_data, STRUCTURE)
+
+  with open(block_file_path, 'wb') as fobj:
+    fobj.write(json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8'))
+
+  return {
+    "columns": detect_number_of_columns(image_data),
+    "file": block_file_path,
+    "image": filepath
+  }
+
+
+def detect_number_of_columns(image_data):
+  number_of_columns = 0
+  for page in image_data.pages:
+    max_y = 0
+    max_x = 0
+    for block in page.blocks:
+      string = ''
+      for paragraph in block.paragraphs:
+        for word in paragraph.words:
+          for symbol in word.symbols:
+            string += symbol.text
+      print("String: ", string.strip())
+
+      print(block.bounding_box.vertices[0].x,  block.bounding_box.vertices[-2].x, block.bounding_box.vertices[0].y, block.bounding_box.vertices[-2].y)
+
+  return number_of_columns
 
 def generate_images_from_pdf(filepath, file_id, directory):
   images = []
@@ -152,12 +186,15 @@ def process_scan(filepath):
   if ext.lower() == '.pdf':  # Parse pdfs
     images = generate_images_from_pdf(filepath, file_id, directory)
   else:  # Parse images
-    images = [filepath]
+    image_path = os.path.sep.join([directory, "{}-1{}".format(file_id, ext)])
+    if not os.path.exists(image_path):
+      shutil.copyfile(filepath, image_path)
+    images = [image_path]
 
   # Generate data
   index_data = []
   bar = Bar('Writing page data', max=len(images))
-  for index, image_path in enumerate(images):
+  for index, image_path in enumerate(images[:1]):
     # Write block data to file
     block_data = write_block_data(image_path, '{}-{}'.format(file_id, index), directory)
     index_data.append(block_data)
@@ -169,4 +206,4 @@ def process_scan(filepath):
     fobj.write(json.dumps(index_data, indent=2, ensure_ascii=False).encode('utf-8'))
   print('DONE: data written to {}'.format(directory))
 
-process_scan(os.path.abspath('tests/base.pdf'))
+process_scan(os.path.abspath('tests/columns.jpg'))

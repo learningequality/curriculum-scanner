@@ -47,4 +47,4 @@ class PDFParser(object):
             writer.addPage(self.pdf.getPage(page))
             writer.write(tmppdf)
             tmppdf.seek(0)
-            yield convert_from_bytes(tmppdf.read(), size=400, fmt="PNG")[0]
+            yield convert_from_bytes(tmppdf.read(), size=1000, fmt="PNG")[0]
