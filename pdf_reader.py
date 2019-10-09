@@ -4,6 +4,8 @@ from PyPDF2 import PdfFileWriter, PdfFileReader
 from PyPDF2.generic import Destination, NullObject
 from PyPDF2.utils import PdfReadError
 from pdf2image import convert_from_bytes
+from PIL import Image
+from PIL import ImageEnhance
 
 class PDFParser(object):
     path = None
@@ -47,4 +49,10 @@ class PDFParser(object):
             writer.addPage(self.pdf.getPage(page))
             writer.write(tmppdf)
             tmppdf.seek(0)
-            yield convert_from_bytes(tmppdf.read(), size=1000, fmt="PNG")[0]
+
+            # Enhance image to make it more accurate to read
+            image = convert_from_bytes(tmppdf.read(), size=1200, fmt="PNG")[0]
+            enhanced = ImageEnhance.Sharpness(image).enhance(1)
+            enhanced = ImageEnhance.Contrast(enhanced).enhance(2)
+            greyscale = enhanced.convert('L')
+            yield greyscale
