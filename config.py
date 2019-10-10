@@ -1,3 +1,9 @@
+###############################################################################
+#
+# Google Vision API Structures
+#
+###############################################################################
+
 SYMBOL_STRUCTURE = {
   'name': 'symbols',
   'fields': ['confidence', 'text'],
@@ -39,6 +45,33 @@ STRUCTURE = {
   'list': PAGE_STRUCTURE
 }
 
+
+###############################################################################
+#
+# Configurations
+#
+###############################################################################
+
+# Directory to write json and image files to
 WRITE_DIRECTORY = 'scans'
-ORIENTATION_DETECTION_THRESHOLD = 10  # 10 characters minimum returns more accurate results
+
+# Allowed formats for processing
+ALLOWED_FORMATS = ['.pdf', '.png', '.jpg', '.jpeg']
+
+# Path to credentials json for Google Vision API
+CREDENTIALS_PATH = 'credentials/client_secret.json'
+
+# Minimum number of characters to use to determine text orientation
+#  - Higher = better chance of correct orientation detection
+#  - Lower = better chance of finding a string longer than this length
+ORIENTATION_DETECTION_THRESHOLD = 10
+
+# Buffer space between columns
+#  - Higher = more tolerant column width detection
+#  - Lower = stricter column width detection
 COLUMN_DETECTION_THRESHOLD = 15
+
+# Resolution to save PDF images in
+#  - Higher = better text recognition
+#  - Lower = better memory usage
+PAGE_RESOLUTION = 1200
