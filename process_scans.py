@@ -76,7 +76,7 @@ def generate_images_from_pdf(filepath, file_id, directory):
     for index, image in enumerate(parser.get_next_page()):
 
       # Generate filepath and save the image if it doesn't exist yet
-      image_path = os.path.sep.join([directory, "{}-{}.png".format(file_id, index)])
+      image_path = get_path(directory, index, "{}-{}.png".format(file_id, index))
       if not os.path.exists(image_path):
         image.save(image_path)
 
@@ -361,6 +361,13 @@ def write_block_data(filepath, save_to_path):
 #
 ###############################################################################
 
+def get_path(file_id, index, filename):
+  directory = os.path.sep.join([file_id, str(index)])
+  if not os.path.exists(directory):
+    os.makedirs(directory)
+
+  return os.path.sep.join([directory, filename])
+
 def process_scan(filepath):
   """
     Generates images and json files under a `<filename>-<hash of file>` folder
@@ -402,7 +409,8 @@ def process_scan(filepath):
 
   # Or copy the file to same folder as json files if it's already an image
   else:
-    image_path = os.path.sep.join([directory, "{}-0{}".format(file_id, ext)])
+    image_path = get_path(directory, 0, "{}-0{}".format(file_id, ext))
+    handle_path()
     shutil.copyfile(filepath, image_path)
     images = [image_path]
 
@@ -415,7 +423,7 @@ def process_scan(filepath):
     autocorrect_image(image_path)
 
     # Step 4: Write blocks data to json files and save bounding box images
-    save_to_path = os.path.sep.join([directory, '{}-{}'.format(file_id, index)])
+    save_to_path = get_path(directory, index, '{}-{}'.format(file_id, index))
     block_data = write_block_data(image_path, save_to_path)
     index_data.append(block_data)
     bar.next()
