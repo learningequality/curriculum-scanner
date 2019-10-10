@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import os
+import pickle
 import shutil
 import sys
 
@@ -14,7 +15,7 @@ from google.oauth2 import service_account
 # External library imports
 from progress.bar import Bar
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 # Project imports
 from pdf_reader import PDFParser
@@ -29,6 +30,9 @@ from config import WRITE_DIRECTORY
 credentials = service_account.Credentials.from_service_account_file(CREDENTIALS_PATH)
 CLIENT = vision.ImageAnnotatorClient(credentials=credentials)
 
+VISION_RESPONSE_DIRECTORY = 'vision'
+if not os.path.exists(VISION_RESPONSE_DIRECTORY):
+  os.makedirs(VISION_RESPONSE_DIRECTORY)
 
 ###############################################################################
 #
@@ -88,10 +92,39 @@ def generate_images_from_pdf(filepath, file_id, directory):
 #
 ###############################################################################
 
-def detect_orientation(filepath):
+def get_text_detection(filepath, filename, suffix=""):
+  """
+    Runs Google Vision API text_detection and returns result
+    Args:
+      filepath (str) path to file to use in detection
+      filename (str) unique id of file
+      suffix (str) extra string to use to save data
+    Returns google.cloud.vision.Response object
+  """
+
+  # See if the data has already be generated
+  pickle_path = '{}/{}{}.pickle'.format(VISION_RESPONSE_DIRECTORY, filename, '-' + suffix if suffix else '')
+  if os.path.exists(pickle_path):
+    with open(pickle_path, 'rb') as token:
+      return pickle.load(token)
+
+  # Read the file and run vision api on its text to get bounding polygons
+  with io.open(filepath, 'rb') as image_file:
+    content = image_file.read()
+  vision_image = types.Image(content=content)
+  response = CLIENT.document_text_detection(image=vision_image)
+
+  # Write to pickle file
+  with open(pickle_path, 'wb') as token:
+    pickle.dump(response, token)
+
+  return response
+
+
+def detect_orientation(text_annotations):
   """
     Detects the rotation of the text
-      Args: filepath (str) path to file to detect orientation for
+      Args: text_annotations (google.cloud.vision.TextAnnotations) annotations from Vision API
       Returns degrees of rotation (int)
 
     Logic:
@@ -102,15 +135,11 @@ def detect_orientation(filepath):
       |    0°    |    |    90°   |    |   180°   |    |   270°   |
       # -------- #    # -------- #    # -------- P    P -------- #
   """
-  # Read the file and run vision api on its text to get bounding polygons
-  with open(filepath, 'rb') as image_file:
-    content = image_file.read()
-  image = types.Image(content=content)
-  response = CLIENT.text_detection(image=image)
+
 
   # Find the first description that is longer than the threshold
   # (Skip first item as it contains the whole sentence)
-  for annotation in response.text_annotations[1:]:
+  for annotation in text_annotations[1:]:
     if len(annotation.description) > ORIENTATION_DETECTION_THRESHOLD:
       break;
 
@@ -140,12 +169,21 @@ def autocorrect_image(filepath):
       Args: filepath (str) path to image
       Returns degrees of rotation (int)
   """
-  orientation = detect_orientation(filepath)
+  filename, _ext = os.path.splitext(os.path.basename(filepath))
+  image = Image.open(filepath)
 
-  # Rotate the image if it's not properly oriented
+  # Get Vision API data
+  response = get_text_detection(filepath, filename, suffix="original")
+
+  # Rotate and save the image if it's not properly oriented
+  orientation = detect_orientation(response.text_annotations)
   if orientation != 0:
-    image = Image.open(filepath)
     rotated = image.rotate(orientation, expand=1)
+
+    # Straighten image
+    (w,h) = rotated.size
+    rotated = rotated.transform(rotated.size, Image.QUAD, (0,0,0,h,w,h,w,0))
+
     rotated.save(filepath)
 
   return orientation
@@ -153,9 +191,34 @@ def autocorrect_image(filepath):
 
 ###############################################################################
 #
-# Step 4: Write blocks data to json files
+# Step 4: Write blocks data to json files and save bounding box images
 #
 ###############################################################################
+
+def draw_bounding_box(image, bound, color="red"):
+  draw = ImageDraw.Draw(image)
+  draw.line([bound.vertices[0].x, bound.vertices[0].y,
+            bound.vertices[1].x, bound.vertices[1].y,
+            bound.vertices[2].x, bound.vertices[2].y,
+            bound.vertices[3].x, bound.vertices[3].y,
+            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=4)
+  return image
+
+
+def draw_boxes_on_image(filepath, save_to_path, pages):
+  # Draw borders
+  save_to_path = '{}_boxes.png'.format(save_to_path)
+  image = Image.open(filepath)
+  for page in pages:
+    for block in page.blocks:
+      for paragraph in block.paragraphs:
+        for word in paragraph.words:
+          draw_bounding_box(image, word.bounding_box, color="yellow")
+        draw_bounding_box(image, paragraph.bounding_box, color="blue")
+      draw_bounding_box(image, block.bounding_box)
+  image.save(save_to_path)
+  return save_to_path
+
 
 def convert_object_to_dict(obj):
   """
@@ -221,7 +284,7 @@ def convert_image_data_to_dict(item, structure):
   return data
 
 
-def detect_number_of_columns(image_data):
+def detect_columns(image_data):
   """
     Detects how many columns are in the object based on the texts' bounding boxes
     Args: image_data (google.cloud.vision.full_text_annotation) data to use for detection
@@ -255,10 +318,10 @@ def detect_number_of_columns(image_data):
       if not range_found:
         ranges.append((x0, x1))
 
-  return len(ranges)
+  return ranges
 
 
-def write_block_data(filepath, filename, directory):
+def write_block_data(filepath, save_to_path):
   """
     Writes the Google Vision API generated data to a json file
     Args:
@@ -268,15 +331,12 @@ def write_block_data(filepath, filename, directory):
     Returns dict of metadata for the index.json file
   """
   # Generate path to write data to
-  block_file_path = os.path.sep.join([directory, '{}_ocr.json'.format(filename)])
+  block_file_path = '{}_ocr.json'.format(save_to_path)
 
   # Read the file and generate data
   # Note: Cannot reuse the data from detect_orientation as the bounding boxes
   #       may have changed due to the image rotating
-  with open(filepath, 'rb') as image_file:
-    content = image_file.read()
-  image = types.Image(content=content)
-  response = CLIENT.text_detection(image=image)
+  response = get_text_detection(filepath, os.path.basename(save_to_path))
 
   # Convert the objects to a serializable dict
   image_data = response.full_text_annotation
@@ -288,12 +348,11 @@ def write_block_data(filepath, filename, directory):
 
   # Return metadata to be saved under index.json file
   return {
-    "columns": detect_number_of_columns(image_data),
+    "columns": detect_columns(image_data),
     "file": block_file_path,
-    "image": filepath
+    "image": filepath,
+    "boxes": draw_boxes_on_image(filepath, save_to_path, response.full_text_annotation.pages)
   }
-
-
 
 
 ###############################################################################
@@ -343,7 +402,7 @@ def process_scan(filepath):
 
   # Or copy the file to same folder as json files if it's already an image
   else:
-    image_path = os.path.sep.join([directory, "{}-1{}".format(file_id, ext)])
+    image_path = os.path.sep.join([directory, "{}-0{}".format(file_id, ext)])
     shutil.copyfile(filepath, image_path)
     images = [image_path]
 
@@ -355,8 +414,9 @@ def process_scan(filepath):
     # Step 3: Auto-rotate images based on detected orientation
     autocorrect_image(image_path)
 
-    # Step 4: Write blocks data to json files
-    block_data = write_block_data(image_path, '{}-{}'.format(file_id, index), directory)
+    # Step 4: Write blocks data to json files and save bounding box images
+    save_to_path = os.path.sep.join([directory, '{}-{}'.format(file_id, index)])
+    block_data = write_block_data(image_path, save_to_path)
     index_data.append(block_data)
     bar.next()
 
