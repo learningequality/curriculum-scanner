@@ -7,6 +7,8 @@ from pdf2image import convert_from_bytes
 from PIL import Image
 from PIL import ImageEnhance
 from config import PAGE_RESOLUTION
+from config import IMAGE_CONTRAST
+
 
 class PDFParser(object):
   path = None
@@ -66,7 +68,5 @@ class PDFParser(object):
 
       # Enhance image to make it more accurate to read
       image = convert_from_bytes(tmppdf.read(), size=PAGE_RESOLUTION, fmt="PNG")[0]
-      enhanced = ImageEnhance.Sharpness(image).enhance(1)
-      enhanced = ImageEnhance.Contrast(enhanced).enhance(2)
-      greyscale = enhanced.convert('L')
-      yield greyscale
+      enhanced = ImageEnhance.Contrast(image).enhance(IMAGE_CONTRAST)
+      yield enhanced

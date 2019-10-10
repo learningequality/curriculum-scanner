@@ -1,3 +1,5 @@
+from enum import Enum
+
 ###############################################################################
 #
 # Google Vision API Structures
@@ -45,6 +47,12 @@ STRUCTURE = {
   'list': PAGE_STRUCTURE
 }
 
+class StructureType(Enum):
+  PAGE = 1
+  BLOCK = 2
+  PARA = 3
+  WORD = 4
+  SYMBOL = 5
 
 ###############################################################################
 #
@@ -75,3 +83,11 @@ COLUMN_DETECTION_THRESHOLD = 15
 #  - Higher = better text recognition
 #  - Lower = better memory usage
 PAGE_RESOLUTION = 1200
+
+# Image contrast enhancement level
+#  - Higher = text may be clearer
+#  - Lower = less chance of text blurring with background
+IMAGE_CONTRAST = 2
+
+# % matching characters to be included in the search results
+SEARCH_THRESHOLD = 90
