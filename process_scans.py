@@ -6,22 +6,27 @@ import os
 import shutil
 import sys
 
-
 # Imports the Google Cloud client library
 from google.cloud import vision
 from google.cloud.vision import types
 from google.oauth2 import service_account
 
-# Other imports
+# External library imports
 from progress.bar import Bar
 import numpy as np
 from PIL import Image
 
+# Project imports
 from pdf_reader import PDFParser
-from config import STRUCTURE, WRITE_DIRECTORY, ORIENTATION_DETECTION_THRESHOLD, COLUMN_DETECTION_THRESHOLD
+from config import ALLOWED_FORMATS
+from config import CREDENTIALS_PATH
+from config import COLUMN_DETECTION_THRESHOLD
+from config import ORIENTATION_DETECTION_THRESHOLD
+from config import STRUCTURE
+from config import WRITE_DIRECTORY
 
-# Instantiates a client
-credentials = service_account.Credentials.from_service_account_file('credentials/client_secret.json')
+# Instantiates a Google Vision API client to be used for text detection
+credentials = service_account.Credentials.from_service_account_file(CREDENTIALS_PATH)
 CLIENT = vision.ImageAnnotatorClient(credentials=credentials)
 
 
@@ -32,6 +37,11 @@ CLIENT = vision.ImageAnnotatorClient(credentials=credentials)
 ###############################################################################
 
 def get_hash(filepath):
+  """
+    Generates unique ID based on hash of the file
+      Args: filepath (str) path to file to read
+      Returns hash of file
+  """
   filehash = hashlib.md5()
 
   with open(filepath, 'rb') as fobj:
@@ -48,14 +58,24 @@ def get_hash(filepath):
 ###############################################################################
 
 def generate_images_from_pdf(filepath, file_id, directory):
+  """
+    Reads the pdf and creates an image of each page
+      Args:
+        filepath (str) path to pdf
+        file_id (str) unique id to use in image filename (<file_id>-<page number>.png)
+        directory (str) directory to save generated images under
+      Returns list of image paths to the newly generated image files
+  """
   images = []
   with PDFParser(filepath) as parser:
-    # Write page images to image file
     bar = Bar('Converting pages to images', max=parser.get_num_pages())
     for index, image in enumerate(parser.get_next_page()):
+
+      # Generate filepath and save the image if it doesn't exist yet
       image_path = os.path.sep.join([directory, "{}-{}.png".format(file_id, index)])
       if not os.path.exists(image_path):
         image.save(image_path)
+
       images.append(image_path)
       bar.next()
     bar.finish()
@@ -68,16 +88,40 @@ def generate_images_from_pdf(filepath, file_id, directory):
 #
 ###############################################################################
 
-def detect_orientation(annotations):
-  for annotation in annotations[1:]:  # Skip first item as it contains the whole sentence
+def detect_orientation(filepath):
+  """
+    Detects the rotation of the text
+      Args: filepath (str) path to file to detect orientation for
+      Returns degrees of rotation (int)
+
+    Logic:
+      Using a test point (P), determine how the text is rotated
+      based on its orientation to the center of the bounding polygon
+
+      P -------- #    # -------- P    # -------- #    # -------- #
+      |    0°    |    |    90°   |    |   180°   |    |   270°   |
+      # -------- #    # -------- #    # -------- P    P -------- #
+  """
+  # Read the file and run vision api on its text to get bounding polygons
+  with open(filepath, 'rb') as image_file:
+    content = image_file.read()
+  image = types.Image(content=content)
+  response = CLIENT.text_detection(image=image)
+
+  # Find the first description that is longer than the threshold
+  # (Skip first item as it contains the whole sentence)
+  for annotation in response.text_annotations[1:]:
     if len(annotation.description) > ORIENTATION_DETECTION_THRESHOLD:
       break;
 
+  # Determine the center of the text
   center_x = np.mean([v.x for v in annotation.bounding_poly.vertices])
   center_y = np.mean([v.y for v in annotation.bounding_poly.vertices])
 
+  # Select a test point
   first_point = annotation.bounding_poly.vertices[0]
 
+  # Determine the text's orientation
   if first_point.x < center_x:
     if first_point.y < center_y:
       return 0
@@ -91,12 +135,14 @@ def detect_orientation(annotations):
 
 
 def autocorrect_image(filepath):
-  with open(filepath, 'rb') as image_file:
-    content = image_file.read()
-  image = types.Image(content=content)
-  response = CLIENT.text_detection(image=image)
-  orientation = detect_orientation(response.text_annotations)
+  """
+    Rotates image based on its detected orientation
+      Args: filepath (str) path to image
+      Returns degrees of rotation (int)
+  """
+  orientation = detect_orientation(filepath)
 
+  # Rotate the image if it's not properly oriented
   if orientation != 0:
     image = Image.open(filepath)
     rotated = image.rotate(orientation, expand=1)
@@ -112,10 +158,18 @@ def autocorrect_image(filepath):
 ###############################################################################
 
 def convert_object_to_dict(obj):
+  """
+    Read the fields for the object and convert it to a dict
+    Args: obj (object) to write dict from
+    Returns dict of object fields and values
+  """
   data = {}
+
+  # Read through all the fields on the object
   for field in dir(obj):
     try:
       value = getattr(obj, field)
+      # Don't process hidden fields, camel case field, or functions
       if field.islower() and not field.startswith('_') and not callable(value):
         json.dumps(value)  # Check if this is serializable
         data[field] = value
@@ -123,10 +177,13 @@ def convert_object_to_dict(obj):
       continue
     except:
       try:
+        # If the field value is a list, go through and convert list items to objects
         if isinstance(value, Iterable):
           data[field] = []
           for item in value:
             data[field].append(convert_object_to_dict(item))
+
+        # Otherwise, just try to convert the object to a dict
         else:
           data[field] = convert_object_to_dict(value)
       except:
@@ -134,7 +191,15 @@ def convert_object_to_dict(obj):
 
   return data
 
+
 def convert_image_data_to_dict(item, structure):
+  """
+    Serializes Google Vision API's returned data object
+    Args:
+      item (google.cloud.vision object): object to serialize
+      structure (dict): structure to parse object with (see config.py)
+    Returns serialized dict of object values
+  """
   data = {}
 
   # Copy fields
@@ -157,22 +222,36 @@ def convert_image_data_to_dict(item, structure):
 
 
 def detect_number_of_columns(image_data):
+  """
+    Detects how many columns are in the object based on the texts' bounding boxes
+    Args: image_data (google.cloud.vision.full_text_annotation) data to use for detection
+    Returns number of columns detected
+  """
+
+  # Parse through all of the blocks in image_data
   ranges = []
   for page in image_data.pages:
-    max_y = 0
-    max_x = 0
     for block in page.blocks:
+
+      # Get x range of bounding box
+      # x0 --------------- x1
+      # |   bounding_box   |
+      # x0 --------------- x1
       x0 = block.bounding_box.vertices[0].x - COLUMN_DETECTION_THRESHOLD
       x1 = block.bounding_box.vertices[-2].x + COLUMN_DETECTION_THRESHOLD
 
+      # See if the block overlaps with any of the previously found ranges
       range_found = False
       for index, r in enumerate(ranges):
         intersection = list(set(range(r[0], r[1])) & set(range(x0, x1)))
         if len(intersection):
           range_found = True
+          # Expand the intersecting range to include full bounding box
           ranges[index] = (min(r[0], x0), max(r[1], x1))
           break;
 
+      # Add the range to the list of ranges if none of the existing ranges
+      # have intersected with it
       if not range_found:
         ranges.append((x0, x1))
 
@@ -180,19 +259,34 @@ def detect_number_of_columns(image_data):
 
 
 def write_block_data(filepath, filename, directory):
+  """
+    Writes the Google Vision API generated data to a json file
+    Args:
+      filepath (str) path to file to read
+      filename (str) name of json file to write to
+      directory (str) directory to save json file under
+    Returns dict of metadata for the index.json file
+  """
+  # Generate path to write data to
   block_file_path = os.path.sep.join([directory, '{}_ocr.json'.format(filename)])
 
+  # Read the file and generate data
+  # Note: Cannot reuse the data from detect_orientation as the bounding boxes
+  #       may have changed due to the image rotating
   with open(filepath, 'rb') as image_file:
     content = image_file.read()
   image = types.Image(content=content)
   response = CLIENT.text_detection(image=image)
 
+  # Convert the objects to a serializable dict
   image_data = response.full_text_annotation
   data = convert_image_data_to_dict(image_data, STRUCTURE)
 
+  # Write the data to the file
   with open(block_file_path, 'wb') as fobj:
     fobj.write(json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8'))
 
+  # Return metadata to be saved under index.json file
   return {
     "columns": detect_number_of_columns(image_data),
     "file": block_file_path,
@@ -209,6 +303,27 @@ def write_block_data(filepath, filename, directory):
 ###############################################################################
 
 def process_scan(filepath):
+  """
+    Generates images and json files under a `<filename>-<hash of file>` folder
+    Args: filepath (str) path to file to process
+    Returns None
+
+    Output:
+      <filename>-<hash of file>
+      -- index.json
+      -- <filename>-<hash of file>-1.png
+      -- <filename>-<hash of file>-1_ocr.json
+      -- <filename>-<hash of file>-2.png
+      -- <filename>-<hash of file>-2_ocr.json
+
+    Where index.json stores the order of the pages as well as the following data:
+      {
+        "columns": int,  # Number of columns detected
+        "file": str,     # Path to json file with Google Vision API data
+        "image": str,    # Path to image that was used to generate data
+      }
+  """
+
   # Step 1: Set up file path to write to
   print('Processing {}'.format(filepath))
   filename, ext = os.path.splitext(os.path.basename(filepath))
@@ -225,11 +340,14 @@ def process_scan(filepath):
   images = []
   if ext.lower() == '.pdf':  # Parse pdfs
     images = generate_images_from_pdf(filepath, file_id, directory)
-  else:  # Parse images
+
+  # Or copy the file to same folder as json files if it's already an image
+  else:
     image_path = os.path.sep.join([directory, "{}-1{}".format(file_id, ext)])
     shutil.copyfile(filepath, image_path)
     images = [image_path]
 
+  # Generate json files for each image
   index_data = []
   bar = Bar('Writing page data', max=len(images))
   for index, image_path in enumerate(images):
@@ -250,9 +368,25 @@ def process_scan(filepath):
   print('DONE: data written to {}'.format(directory))
 
 
-if not len(sys.argv) > 1:
-  raise RuntimeError('Filepath to curriculum must be included (Usage: process_scans.py <filepath>)')
-elif not os.path.exists(sys.argv[1]):
-  raise RuntimeError('{} not found'.format(sys.argv[1]))
+###############################################################################
+#
+# CLI
+#
+###############################################################################
 
-process_scan(os.path.abspath(sys.argv[1]))
+if __name__ == '__main__':
+
+  # Make sure file path is provided
+  if not len(sys.argv) > 1:
+    raise RuntimeError('Filepath to curriculum must be included (Usage: process_scans.py <filepath>)')
+
+  # Make sure the file exists at the given path
+  elif not os.path.exists(sys.argv[1]):
+    raise RuntimeError('{} not found'.format(sys.argv[1]))
+
+  # Make sure the file is an accepted format
+  _fn, ext = os.path.splitext(sys.argv[1])
+  if ext.lower() not in ALLOWED_FORMATS:
+    raise RuntimeError('Unable to process {} (allowed formats: {})'.format(sys.argv[1], ', '.join(ALLOWED_FORMATS)))
+
+  process_scan(os.path.abspath(sys.argv[1]))
