@@ -362,6 +362,14 @@ def write_block_data(filepath, save_to_path):
 ###############################################################################
 
 def get_path(file_id, index, filename):
+  """
+    Generates a file path to write to
+      Args:
+        file_id (str) unique id for file
+        index (int) page number
+        filename (str) name of file to save to
+      Returns str write to path
+  """
   directory = os.path.sep.join([file_id, str(index)])
   if not os.path.exists(directory):
     os.makedirs(directory)
@@ -410,7 +418,6 @@ def process_scan(filepath):
   # Or copy the file to same folder as json files if it's already an image
   else:
     image_path = get_path(directory, 0, "{}-0{}".format(file_id, ext))
-    handle_path()
     shutil.copyfile(filepath, image_path)
     images = [image_path]
 
