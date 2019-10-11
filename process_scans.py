@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from enum import Enum
 import hashlib
 import io
 import json
@@ -33,6 +34,21 @@ CLIENT = vision.ImageAnnotatorClient(credentials=credentials)
 VISION_RESPONSE_DIRECTORY = 'vision'
 if not os.path.exists(VISION_RESPONSE_DIRECTORY):
   os.makedirs(VISION_RESPONSE_DIRECTORY)
+
+# Google break type structures
+class BreakType(Enum):
+  SPACE = 1
+  TAB = 2
+  ALT_SPACE = 3
+  NEWLINE = 5
+
+BREAK_MAP = {
+  BreakType.SPACE.value: ' ',
+  BreakType.ALT_SPACE.value: ' ',
+  BreakType.TAB.value: '\t',
+  BreakType.NEWLINE.value: '\n'
+}
+
 
 ###############################################################################
 #
@@ -196,25 +212,48 @@ def autocorrect_image(filepath):
 ###############################################################################
 
 def draw_bounding_box(image, bound, color="red"):
+  """
+    Draws a box given the bounding_box.vertices
+    Args:
+      image (PIL.Image) image to draw on
+      bound (google.cloud.vision bounding_box) vertices of rectangle
+      color (str) color of box [default: 'red']
+    Returns None
+  """
   draw = ImageDraw.Draw(image)
   draw.line([bound.vertices[0].x, bound.vertices[0].y,
             bound.vertices[1].x, bound.vertices[1].y,
             bound.vertices[2].x, bound.vertices[2].y,
             bound.vertices[3].x, bound.vertices[3].y,
             bound.vertices[0].x, bound.vertices[0].y], fill=color, width=4)
-  return image
 
 
-def draw_boxes_on_image(filepath, save_to_path, pages):
-  # Draw borders
-  save_to_path = '{}_boxes.png'.format(save_to_path)
+def draw_boxes_on_image(filepath, directory, pages):
+  """
+    Draws boxes on blocks, paragraphs, and words
+    Args:
+      filepath (str) path to image
+      directory (str) directory to save file under
+      pages (google.cloud.vision.FullTextAnnotation) OCR data
+    Returns str path to image with boxes on it
+
+    Blocks = red
+    Paragraphs = blue
+    Words = yellow
+  """
+  save_to_path = '{}_boxes.png'.format(directory)
   image = Image.open(filepath)
   for page in pages:
     for block in page.blocks:
       for paragraph in block.paragraphs:
         for word in paragraph.words:
+          # Draw words
           draw_bounding_box(image, word.bounding_box, color="yellow")
+
+        # Draw paragraphs
         draw_bounding_box(image, paragraph.bounding_box, color="blue")
+
+      # Draw blocks
       draw_bounding_box(image, block.bounding_box)
   image.save(save_to_path)
   return save_to_path
@@ -321,6 +360,33 @@ def detect_columns(image_data):
   return ranges
 
 
+def write_text_fields(data):
+  """
+    Adds text field to data
+    Args:
+      data (google.cloud.vision.FullTextAnnotation) OCR data
+    Returns None
+  """
+  for page in data['pages']:
+    page_text = ''
+    for block in page['blocks']:
+      block_text = ''
+      for paragraph in block['paragraphs']:
+        paragrph_text = ''
+        for word in paragraph['words']:
+          word_text = ''
+          for symbol in word['symbols']:
+            break_char = BREAK_MAP.get(symbol['property']['detected_break']['type']) or ''
+            word_text += symbol['text'] + break_char
+          word['text'] = word_text
+          paragrph_text += word_text
+        paragraph['text'] = paragrph_text
+        block_text += paragrph_text
+      block['text'] = block_text
+      page_text += block_text + '\n\n'
+    page['text'] = page_text
+
+
 def write_block_data(filepath, save_to_path):
   """
     Writes the Google Vision API generated data to a json file
@@ -341,6 +407,7 @@ def write_block_data(filepath, save_to_path):
   # Convert the objects to a serializable dict
   image_data = response.full_text_annotation
   data = convert_image_data_to_dict(image_data, STRUCTURE)
+  write_text_fields(data)
 
   # Write the data to the file
   with open(block_file_path, 'wb') as fobj:
