@@ -77,7 +77,7 @@ ORIENTATION_DETECTION_THRESHOLD = 10
 # Buffer space between columns
 #  - Higher = more tolerant column width detection
 #  - Lower = stricter column width detection
-COLUMN_DETECTION_THRESHOLD = 15
+COLUMN_DETECTION_THRESHOLD = 50
 
 # Resolution to save PDF images in
 #  - Higher = better text recognition
