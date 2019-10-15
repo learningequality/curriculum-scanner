@@ -272,7 +272,6 @@ def draw_boxes_on_image(filepath, directory, pages):
       # Draw blocks
       draw_bounding_box(image, block.bounding_box, padding=2)
   image.save(save_to_path)
-  image.show()
   return save_to_path
 
 
@@ -530,6 +529,10 @@ def process_scan(filepath):
   if not os.path.exists(directory):
     os.makedirs(directory)
 
+  # Copy source file to directory
+  copy_path = os.path.sep.join([directory, os.path.basename(filepath)])
+  if not os.path.exists(copy_path):
+    shutil.copyfile(filepath, copy_path)
 
   # Step 2: Convert each pdf page to an image
   images = []
