@@ -33,9 +33,6 @@ from config import ORIENTATION_DETECTION_THRESHOLD
 from config import STRUCTURE
 from config import WRITE_DIRECTORY
 
-# Instantiates a Google Vision API client to be used for text detection
-credentials = service_account.Credentials.from_service_account_file(CREDENTIALS_PATH)
-CLIENT = vision.ImageAnnotatorClient(credentials=credentials)
 
 VISION_RESPONSE_DIRECTORY = 'vision'
 if not os.path.exists(VISION_RESPONSE_DIRECTORY):
@@ -55,6 +52,10 @@ BREAK_MAP = {
   BreakType.NEWLINE.value: '\n'
 }
 
+# Instantiates a Google Vision API client to be used for text detection
+def get_client():
+  credentials = service_account.Credentials.from_service_account_file(CREDENTIALS_PATH)
+  return vision.ImageAnnotatorClient(credentials=credentials)
 
 ###############################################################################
 #
@@ -134,7 +135,8 @@ def get_text_detection(filepath, filename, suffix=""):
   with io.open(filepath, 'rb') as image_file:
     content = image_file.read()
   vision_image = types.Image(content=content)
-  response = CLIENT.document_text_detection(image=vision_image)
+  client = get_client()
+  response = client.document_text_detection(image=vision_image)
 
   # Write to pickle file
   with open(pickle_path, 'wb') as token:

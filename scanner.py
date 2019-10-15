@@ -21,12 +21,11 @@ BREAK_MAP = {
   BreakType.NEWLINE.value: '\n'
 }
 
-BlockOrder = {
-  TOPBOTTOM: 'TOPBOTTOM',
-  BOTTOMTOP: 'BOTTOMTOP',
-  LEFTRIGHT: 'LEFTRIGHT',
-  RIGHTLEFT: 'RIGHTLEFT'
-}
+class BlockOrder(Enum):
+  TOPBOTTOM = 0
+  BOTTOMTOP = 1
+  LEFTRIGHT = 2
+  RIGHTLEFT = 3
 
 
 class CurriculumScanner(object):
@@ -83,7 +82,7 @@ class CurriculumScanner(object):
       yield self.get_page_data(page_number)
 
 
-  def get_blocks_by_order(self, page_number, order=BlockOrder.LEFTRIGHT):
+  def get_blocks_by_order(self, page_number, order=BlockOrder.LEFTRIGHT.value):
     """
       Get the blocks according to a given order
         Args:
@@ -96,13 +95,13 @@ class CurriculumScanner(object):
     blocks = []
 
     for page in page_data['pages']:
-      if order == 'topbottom':
+      if order == BlockOrder.TOPBOTTOM.value:
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['y'] for v in b['bounding_box']['vertices'])))
-      elif order == 'bottomtop':
+      elif order == BlockOrder.BOTTOMTOP.value:
         blocks.extend(sorted(page['blocks'], key=lambda b: max(v['y'] for v in b['bounding_box']['vertices']), reverse=True))
-      elif order == 'rightleft'
+      elif order == BlockOrder.RIGHTLEFT.value:
         blocks.extend(sorted(page['blocks'], key=lambda b: max(v['x'] for v in b['bounding_box']['vertices']), reverse=True))
-      elif order == 'leftright'
+      elif order == BlockOrder.LEFTRIGHT.value:
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['x'] for v in b['bounding_box']['vertices'])))
     return blocks
 
