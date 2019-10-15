@@ -125,3 +125,46 @@ This will return a list of where each match is found
   }
 ]
 ```
+
+#### draw_boxes
+If you would like to draw boxes where the OCR bounds are, use the `scanner.draw_boxes(page_number)` method.
+
+```
+	image = scanner.draw_boxes(0)  # Draw boxes for page 0
+```
+
+This will return an image of the boxes drawn, which can be shown with `image.show()`
+
+If you would like to draw other boxes, you can create a dict with the relevant bounds data. For instance:
+```
+bound = {
+	'vertices': [
+		{'x': int, 'y': int},
+		{'x': int, 'y': int},
+		{'x': int, 'y': int},
+		{'x': int, 'y': int},
+	]
+}
+
+image = scanner.get_page_image(0)
+
+scanner.draw_boxes(image, bound)
+```
+
+#### detect_columns
+
+To get column x_ranges, you may use the `scanner.detect_columns(page_number)` method.
+
+```
+  columns = scanner.detect_columns(0)  # Get column ranges for page 0
+```
+
+For example, if the page has two columns, the data may look something like this:
+```
+[
+	(0, 100),   # First column spans from 0-100px
+	(120, 200), # Second column spans from 120-200px
+]
+```
+
+__Please note__: This code isn't guaranteed to work for all pages

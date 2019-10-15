@@ -4,8 +4,11 @@ import os
 from fuzzywuzzy import fuzz
 from process_scans import get_hash, process_scan
 from PIL import Image, ImageDraw
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from config import StructureType
-from config import SEARCH_THRESHOLD, WRITE_DIRECTORY, BLOCK_BORDER_THICKNESS
+from config import SEARCH_THRESHOLD, WRITE_DIRECTORY, BLOCK_BORDER_THICKNESS, COLUMN_DETECTION_THRESHOLD
+
 
 # Google break type structures
 class BreakType(Enum):
@@ -74,6 +77,14 @@ class CurriculumScanner(object):
     """
     with open(self.pages[page_number]['file'], 'rb') as fobj:
       return json.load(fobj)
+
+  def get_page_image(self, page_number):
+    """
+      Gets an image object for a certain page number
+        Args: page_number (int) page to get image for
+        Returns PIL.Image for page
+    """
+    return Image.open(self.pages[page_number]['image'])
 
 
   def get_next_page(self):
@@ -145,7 +156,7 @@ class CurriculumScanner(object):
         bound (dict) vertices of rectangle
         color (str) color of box [default: 'red']
         padding (int) padding for drawn box
-      Returns None
+      Returns PIL.Image object with box drawn on it
     """
     draw = ImageDraw.Draw(image)
     block_padding = padding * BLOCK_BORDER_THICKNESS
@@ -167,10 +178,8 @@ class CurriculumScanner(object):
     """
       Draws boxes on blocks, paragraphs, and words
       Args:
-        filepath (str) path to image
-        directory (str) directory to save file under
-        pages (google.cloud.vision.FullTextAnnotation) OCR data
-      Returns str path to image with boxes on it
+        page_number (int) page to draw boxes on
+      Returns PIL.Image object with boxes drawn on it
 
       Blocks = red
       Paragraphs = blue
@@ -237,3 +246,70 @@ class CurriculumScanner(object):
                 })
 
     return results
+
+
+  def detect_columns(self, page_number):
+  """
+    Detects how many columns are in the object based on the texts' bounding boxes
+    Args: page_number (int) page to detect columns on
+    Returns list of column x ranges
+  """
+
+  # Set up variables for collecting info on image
+  mins = []
+  maxes = []
+  dataset = []
+  image_data = self.get_page_data(page_number)
+
+  # Collect starting x values for each block
+  for page in image_data['pages']:
+    for y, block in enumerate(page['blocks']):
+      x0 = float(min([v.x for v in block['bounding_box']['vertices']]))
+      mins.append(x0)
+      maxes.append(max([v.x for v in block['bounding_box']['vertices']]))
+
+      # Append the point to the dataset for each paragraph to give
+      # it more weight, making sure that the point is unique as
+      # k-means needs the set of points and will remove duplicates
+      for i, paragraph in enumerate(block['paragraphs']):
+        while (x0, 0) in dataset:
+          x0 += 0.5
+        dataset.append((x0, 0))
+
+  # Get clustered points
+  max_width = max(maxes)
+  column_clusters = (1, [min(mins)])
+  if len(set(dataset)) > 2:
+    sil = []
+    for k in range(2, len(set(dataset))):
+      kmeans = KMeans(n_clusters = k).fit(dataset)
+      score = silhouette_score(dataset, kmeans.labels_, metric = 'correlation')
+      cluster_centers = [c[0] for c in kmeans.cluster_centers_]
+      sil.append((score, cluster_centers))
+    column_clusters = next(((i + 2, s[1]) for i, s in enumerate(sil) if s[0] > 0), column_clusters)
+
+  # Collect ranges based on boxes that fall into
+  ranges = []
+  if column_clusters[0] == 1:
+    ranges = [(column_clusters[1][0], max_width)]
+
+  else:
+    radius = (max_width / column_clusters[0]) / 2 + COLUMN_DETECTION_THRESHOLD
+    for starting_point in column_clusters[1]:
+      x_range = {}
+      for page in image_data['pages']:
+        for block in page.blocks:
+          x0 = min([v.x for v in block['bounding_box']['vertices']])
+          x1 = max([v.x for v in block['bounding_box']['vertices']])
+          x_values = set(range(x0, x1))
+
+          # Get highest width of boxes that are within the radius of the starting point
+          if starting_point - radius <= x0 and x0 <= starting_point + radius \
+            and x1 - x0 <= max_width / column_clusters[0] :
+            x_range['x0'] = min(x0, x_range['x0']) if x_range.get('x0') else x0
+            x_range['x1'] = max(x1, x_range['x1']) if x_range.get('x1') else x1
+
+      if x_range:
+        ranges.append((x_range['x0'], x_range['x1']))
+
+  return ranges
