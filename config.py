@@ -63,12 +63,12 @@ class StructureType(Enum):
 ###############################################################################
 
 # Directory to write json and image files to
-BASE_DIR = os.path.join(os.path.expanduser('~'), 'design2align')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Directory containing curriculum source files to be scanned
+# Directory containing curriculum PDF source files to be scanned.
 INPUT_DIRECTORY = os.path.join(BASE_DIR, 'inputs')
 
-# Director where scan outputs are stored.
+# Director where structued OCR outputs are stored.
 WRITE_DIRECTORY = os.path.join(BASE_DIR, 'scans')
 
 # Allowed formats for processing
