@@ -1,4 +1,7 @@
+inputs/*
 scans/*
-credentials/*
 vision/*
+credentials/*
 *.pyc
+.ipynb_checkpoints
+
