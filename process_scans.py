@@ -25,8 +25,10 @@ from sklearn.metrics import silhouette_score
 # Project imports
 from pdf_reader import PDFParser
 from config import ALLOWED_FORMATS
+from config import BLOCK_BORDER_THICKNESS
 from config import CREDENTIALS_PATH
 from config import COLUMN_DETECTION_THRESHOLD
+from config import INPUT_DIRECTORY
 from config import ORIENTATION_DETECTION_THRESHOLD
 from config import STRUCTURE
 from config import WRITE_DIRECTORY
@@ -229,7 +231,7 @@ def draw_bounding_box(image, bound, color="red"):
             bound.vertices[1].x, bound.vertices[1].y,
             bound.vertices[2].x, bound.vertices[2].y,
             bound.vertices[3].x, bound.vertices[3].y,
-            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=4)
+            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=BLOCK_BORDER_THICKNESS)
 
 
 def draw_boxes_on_image(filepath, directory, pages):
@@ -501,6 +503,14 @@ def process_scan(filepath):
   # Step 1: Set up file path to write to
   print('Processing {}'.format(filepath))
   filename, ext = os.path.splitext(os.path.basename(filepath))
+
+  # Make sure the file is an accepted format before attempting to process it
+  if ext.lower() not in ALLOWED_FORMATS:
+    print('Skipping file, unknown format: {}'.format(filepath))
+    print('(allowed formats: {})'.format(', '.join(ALLOWED_FORMATS)))
+    # return false so that calling code can decide to raise, give non-zero exit code, etc.
+    return False
+
   filehash = get_hash(filepath)
   file_id = '{}-{}'.format(filename, filehash)
 
@@ -541,6 +551,29 @@ def process_scan(filepath):
   with open(os.path.sep.join([directory, 'index.json']), 'wb') as fobj:
     fobj.write(json.dumps(index_data, indent=2, ensure_ascii=False).encode('utf-8'))
   print('DONE: data written to {}'.format(directory))
+  return index_data
+
+
+def read_input_dir():
+    if not os.path.exists(INPUT_DIRECTORY):
+        print("Input directory doesn't exist: {}".format(INPUT_DIRECTORY))
+
+    file_list = []
+    for root, dirs, files in os.walk(INPUT_DIRECTORY):
+        for afile in files:
+            parts = os.path.splitext(afile)
+            if len(parts) == 1 or parts[1] not in ALLOWED_FORMATS:
+                print("Ignoring file of unsupported type: {}".format(afile))
+            else:
+                file_list.append(os.path.join(root, afile))
+
+    return file_list
+
+
+def process_dir(directory):
+  for afile in os.listdir(directory):
+    filepath = os.path.join(directory, afile)
+    process_scan(filepath)
 
 
 ###############################################################################
@@ -559,9 +592,7 @@ if __name__ == '__main__':
   elif not os.path.exists(sys.argv[1]):
     raise RuntimeError('{} not found'.format(sys.argv[1]))
 
-  # Make sure the file is an accepted format
-  _fn, ext = os.path.splitext(sys.argv[1])
-  if ext.lower() not in ALLOWED_FORMATS:
-    raise RuntimeError('Unable to process {} (allowed formats: {})'.format(sys.argv[1], ', '.join(ALLOWED_FORMATS)))
-
-  process_scan(os.path.abspath(sys.argv[1]))
+  if os.path.isdir(sys.argv[1]):
+    process_dir(sys.argv[1])
+  else:
+    process_scan(os.path.abspath(sys.argv[1]))
