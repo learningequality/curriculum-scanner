@@ -25,6 +25,7 @@ from sklearn.metrics import silhouette_score
 # Project imports
 from pdf_reader import PDFParser
 from config import ALLOWED_FORMATS
+from config import BLOCK_BORDER_THICKNESS
 from config import CREDENTIALS_PATH
 from config import COLUMN_DETECTION_THRESHOLD
 from config import ORIENTATION_DETECTION_THRESHOLD
@@ -215,22 +216,28 @@ def autocorrect_image(filepath):
 #
 ###############################################################################
 
-def draw_bounding_box(image, bound, color="red"):
+def draw_bounding_box(image, bound, color="red", padding=0):
   """
     Draws a box given the bounding_box.vertices
     Args:
       image (PIL.Image) image to draw on
       bound (google.cloud.vision bounding_box) vertices of rectangle
       color (str) color of box [default: 'red']
+      padding (int) padding for drawn box
     Returns None
   """
   draw = ImageDraw.Draw(image)
-  draw.line([bound.vertices[0].x, bound.vertices[0].y,
-            bound.vertices[1].x, bound.vertices[1].y,
-            bound.vertices[2].x, bound.vertices[2].y,
-            bound.vertices[3].x, bound.vertices[3].y,
-            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=4)
+  block_padding = padding * BLOCK_BORDER_THICKNESS
+  left_bottom_x = bound.vertices[0].x - block_padding
+  left_bottom_y = bound.vertices[0].y - block_padding
+  right_bottom_x =  bound.vertices[1].x + block_padding
+  right_bottom_y = bound.vertices[1].y - block_padding
+  right_top_x = bound.vertices[2].x + block_padding
+  right_top_y = bound.vertices[2].y + block_padding
+  left_top_x = bound.vertices[3].x - block_padding
+  left_top_y = bound.vertices[3].y + block_padding
 
+  draw.line([left_bottom_x, left_bottom_y, right_bottom_x, right_bottom_y, right_top_x, right_top_y, left_top_x, left_top_y, left_bottom_x, left_bottom_y], fill=color, width=BLOCK_BORDER_THICKNESS)
 
 def draw_boxes_on_image(filepath, directory, pages):
   """
@@ -255,11 +262,12 @@ def draw_boxes_on_image(filepath, directory, pages):
           draw_bounding_box(image, word.bounding_box, color="yellow")
 
         # Draw paragraphs
-        draw_bounding_box(image, paragraph.bounding_box, color="blue")
+        draw_bounding_box(image, paragraph.bounding_box, color="blue", padding=1)
 
       # Draw blocks
-      draw_bounding_box(image, block.bounding_box)
+      draw_bounding_box(image, block.bounding_box, padding=2)
   image.save(save_to_path)
+  image.show()
   return save_to_path
 
 

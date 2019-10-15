@@ -3,8 +3,9 @@ import json
 import os
 from fuzzywuzzy import fuzz
 from process_scans import get_hash, process_scan
+from PIL import Image, ImageDraw
 from config import StructureType
-from config import SEARCH_THRESHOLD, WRITE_DIRECTORY
+from config import SEARCH_THRESHOLD, WRITE_DIRECTORY, BLOCK_BORDER_THICKNESS
 
 # Google break type structures
 class BreakType(Enum):
@@ -105,7 +106,7 @@ class CurriculumScanner(object):
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['x'] for v in b['bounding_box']['vertices'])))
     return blocks
 
-  def text_within(page_number, x0=0, y0=0, x1=None, y1=None):
+  def text_within(self, page_number, x0=0, y0=0, x1=None, y1=None):
     """
       Finds all text inside a given boundary
         Args:
@@ -136,6 +137,63 @@ class CurriculumScanner(object):
               if(min_x >= x0 and max_x <= x1 and min_y >= y0 and max_y <= y1):
                 text += symbol['text'] + (BREAK_MAP.get(symbol['property']['detected_break']['type']) or '')
     return text
+
+  def draw_box(self, image, bound, color="red", padding=0):
+    """
+      Draws a box given the bounding_box vertices
+      Args:
+        image (PIL.Image) image to draw on
+        bound (dict) vertices of rectangle
+        color (str) color of box [default: 'red']
+        padding (int) padding for drawn box
+      Returns None
+    """
+    draw = ImageDraw.Draw(image)
+    block_padding = padding * BLOCK_BORDER_THICKNESS
+    left_bottom_x = bound['vertices'][0]['x'] - block_padding
+    left_bottom_y = bound['vertices'][0]['y'] - block_padding
+    right_bottom_x =  bound['vertices'][1]['x'] + block_padding
+    right_bottom_y = bound['vertices'][1]['y'] - block_padding
+    right_top_x = bound['vertices'][2]['x'] + block_padding
+    right_top_y = bound['vertices'][2]['y'] + block_padding
+    left_top_x = bound['vertices'][3]['x'] - block_padding
+    left_top_y = bound['vertices'][3]['y'] + block_padding
+
+    draw.line([left_bottom_x, left_bottom_y, right_bottom_x, right_bottom_y, right_top_x, right_top_y,
+              left_top_x, left_top_y, left_bottom_x, left_bottom_y], fill=color, width=BLOCK_BORDER_THICKNESS)
+    return image
+
+
+  def draw_boxes(self, page_number):
+    """
+      Draws boxes on blocks, paragraphs, and words
+      Args:
+        filepath (str) path to image
+        directory (str) directory to save file under
+        pages (google.cloud.vision.FullTextAnnotation) OCR data
+      Returns str path to image with boxes on it
+
+      Blocks = red
+      Paragraphs = blue
+      Words = yellow
+    """
+    filepath = self.pages[page_number]['image']
+    page_data = self.get_page_data(page_number)
+    image = Image.open(filepath)
+    for page in page_data['pages']:
+      for block in page['blocks']:
+        for paragraph in block['paragraphs']:
+          for word in paragraph['words']:
+            # Draw words
+            self.draw_box(image, word['bounding_box'], color="yellow")
+
+          # Draw paragraphs
+          self.draw_box(image, paragraph['bounding_box'], color="blue", padding=1)
+
+        # Draw blocks
+        self.draw_box(image, block['bounding_box'], padding=2)
+
+    return image
 
 
   def find_text_matches(self, text):
