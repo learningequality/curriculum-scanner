@@ -82,26 +82,26 @@ class CurriculumScanner(object):
       yield self.get_page_data(page_number)
 
 
-  def get_blocks_by_order(self, page_number, order=BlockOrder.LEFTRIGHT.value):
+  def get_blocks_by_order(self, page_number, order=BlockOrder.LEFTRIGHT):
     """
       Get the blocks according to a given order
         Args:
           page_number (int) page to get blocks from
 
     """
-    if BlockOrder.get(order):
-      raise RuntimeError("Unrecognized format {} (allowed orders: {})".format(order, [o.value for o in BlockOrder]))
+    if order not in BlockOrder:
+      raise RuntimeError("Unrecognized format {} (allowed orders: {})".format(order, [o[0] for o in BlockOrder.__members__]))
     page_data = self.get_page_data(page_number)
     blocks = []
 
     for page in page_data['pages']:
-      if order == BlockOrder.TOPBOTTOM.value:
+      if order == BlockOrder.TOPBOTTOM:
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['y'] for v in b['bounding_box']['vertices'])))
-      elif order == BlockOrder.BOTTOMTOP.value:
+      elif order == BlockOrder.BOTTOMTOP:
         blocks.extend(sorted(page['blocks'], key=lambda b: max(v['y'] for v in b['bounding_box']['vertices']), reverse=True))
-      elif order == BlockOrder.RIGHTLEFT.value:
+      elif order == BlockOrder.RIGHTLEFT:
         blocks.extend(sorted(page['blocks'], key=lambda b: max(v['x'] for v in b['bounding_box']['vertices']), reverse=True))
-      elif order == BlockOrder.LEFTRIGHT.value:
+      elif order == BlockOrder.LEFTRIGHT:
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['x'] for v in b['bounding_box']['vertices'])))
     return blocks
 
