@@ -1,3 +1,5 @@
+import os
+
 from enum import Enum
 
 ###############################################################################
@@ -61,13 +63,19 @@ class StructureType(Enum):
 ###############################################################################
 
 # Directory to write json and image files to
-WRITE_DIRECTORY = 'scans'
+BASE_DIR = os.path.join(os.path.expanduser('~'), 'design2align')
+
+# Directory containing curriculum source files to be scanned
+INPUT_DIRECTORY = os.path.join(BASE_DIR, 'inputs')
+
+# Director where scan outputs are stored.
+WRITE_DIRECTORY = os.path.join(BASE_DIR, 'scans')
 
 # Allowed formats for processing
 ALLOWED_FORMATS = ['.pdf', '.png', '.jpg', '.jpeg']
 
 # Path to credentials json for Google Vision API
-CREDENTIALS_PATH = 'credentials/client_secret.json'
+CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials', 'client_secret.json')
 
 # Minimum number of characters to use to determine text orientation
 #  - Higher = better chance of correct orientation detection
@@ -83,6 +91,9 @@ COLUMN_DETECTION_THRESHOLD = 50
 #  - Higher = better text recognition
 #  - Lower = better memory usage
 PAGE_RESOLUTION = 1200
+
+# The line width for block borders
+BLOCK_BORDER_THICKNESS = 2
 
 # Image contrast enhancement level
 #  - Higher = text may be clearer

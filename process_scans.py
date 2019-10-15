@@ -25,8 +25,10 @@ from sklearn.metrics import silhouette_score
 # Project imports
 from pdf_reader import PDFParser
 from config import ALLOWED_FORMATS
+from config import BLOCK_BORDER_THICKNESS
 from config import CREDENTIALS_PATH
 from config import COLUMN_DETECTION_THRESHOLD
+from config import INPUT_DIRECTORY
 from config import ORIENTATION_DETECTION_THRESHOLD
 from config import STRUCTURE
 from config import WRITE_DIRECTORY
@@ -229,7 +231,7 @@ def draw_bounding_box(image, bound, color="red"):
             bound.vertices[1].x, bound.vertices[1].y,
             bound.vertices[2].x, bound.vertices[2].y,
             bound.vertices[3].x, bound.vertices[3].y,
-            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=4)
+            bound.vertices[0].x, bound.vertices[0].y], fill=color, width=BLOCK_BORDER_THICKNESS)
 
 
 def draw_boxes_on_image(filepath, directory, pages):
@@ -549,7 +551,23 @@ def process_scan(filepath):
   with open(os.path.sep.join([directory, 'index.json']), 'wb') as fobj:
     fobj.write(json.dumps(index_data, indent=2, ensure_ascii=False).encode('utf-8'))
   print('DONE: data written to {}'.format(directory))
-  return True
+  return index_data
+
+
+def read_input_dir():
+    if not os.path.exists(INPUT_DIRECTORY):
+        print("Input directory doesn't exist: {}".format(INPUT_DIRECTORY))
+
+    file_list = []
+    for root, dirs, files in os.walk(INPUT_DIRECTORY):
+        for afile in files:
+            parts = os.path.splitext(afile)
+            if len(parts) == 1 or parts[1] not in ALLOWED_FORMATS:
+                print("Ignoring file of unsupported type: {}".format(afile))
+            else:
+                file_list.append(os.path.join(root, afile))
+
+    return file_list
 
 
 def process_dir(directory):
