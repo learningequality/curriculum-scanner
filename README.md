@@ -126,6 +126,33 @@ This will return a list of where each match is found
 ]
 ```
 
+#### find_regex_matches
+If you would like to find where a regex appears across the pages, you can use the `scanner.find_text_matches(text)` method.
+
+```
+	matches = scanner.find_text_matches(r'\d+\.\d+\.\d+\.')
+```
+
+This will return a list of where each match is found
+```
+[
+  {
+    "page": int,
+    "block": int,
+    "paragraph": int,
+    "word": int,  # If a word matches the regex
+    "text": str,
+    "bounds": [
+      {"x": int, "y": int},
+      {"x": int, "y": int},
+      {"x": int, "y": int},
+      {"x": int, "y": int}
+    ]
+  }
+]
+```
+
+
 #### draw_boxes
 If you would like to draw boxes where the OCR bounds are, use the `scanner.draw_boxes(page_number)` method.
 
