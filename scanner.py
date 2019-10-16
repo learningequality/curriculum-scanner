@@ -250,8 +250,8 @@ class CurriculumScanner(object):
 
   def find_regex_matches(self, regex):
     """
-      Finds all fuzzy matches of text across pages (SEARCH_THRESHOLD can be updated in config.py)
-        Args: text (str) to find across pages
+      Finds regex matches across all pages
+        Args: regex (regex) to find across pages
         Returns list of all instances a match was found
 
       Sample data:
@@ -261,6 +261,7 @@ class CurriculumScanner(object):
             "block": int,
             "paragraph": int,
             "word": int,
+            "text": str,
             "bounds": [
               {"x": int, "y": int},
               ...
