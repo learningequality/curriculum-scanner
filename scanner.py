@@ -78,7 +78,7 @@ class CurriculumScanner(object):
         Returns dict of page data
     """
 
-    with open(os.path.join(self.index_dir, self.pages[page_number]['file']), 'rb') as fobj:
+    with open(os.path.join(self.pages[page_number]['file']), 'rb') as fobj:
       return json.load(fobj)
 
   def get_page_image(self, page_number):
@@ -87,7 +87,7 @@ class CurriculumScanner(object):
         Args: page_number (int) page to get image for
         Returns PIL.Image for page
     """
-    return Image.open(os.path.join(self.index_dir, self.pages[page_number]['image']))
+    return Image.open(os.path.join(self.pages[page_number]['image']))
 
 
   def get_next_page(self):
