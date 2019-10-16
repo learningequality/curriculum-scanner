@@ -69,7 +69,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIRECTORY = os.path.join(BASE_DIR, 'inputs')
 
 # Director where structued OCR outputs are stored.
-WRITE_DIRECTORY = os.path.join(BASE_DIR, 'scans')
+WRITE_DIRECTORY = 'scans'
 
 # Allowed formats for processing
 ALLOWED_FORMATS = ['.pdf', '.png', '.jpg', '.jpeg']

@@ -163,9 +163,14 @@ def detect_orientation(text_annotations):
 
   # Find the first description that is longer than the threshold
   # (Skip first item as it contains the whole sentence)
+  annotation = None
   for annotation in text_annotations[1:]:
     if len(annotation.description) > ORIENTATION_DETECTION_THRESHOLD:
       break;
+
+  # If the page is blank, just return 0
+  if not annotation:
+    return 0
 
   # Determine the center of the text
   center_x = np.mean([v.x for v in annotation.bounding_poly.vertices])
@@ -366,6 +371,10 @@ def detect_columns(filepath, image_data):
           x0 += 0.5
         dataset.append((x0, 0))
 
+  # If the page is blank, return empty array
+  if not dataset:
+    return []
+
   # Get clustered points
   max_width = max(maxes)
   column_clusters = (1, [min(mins)])
@@ -482,11 +491,11 @@ def get_path(file_id, index, filename):
         filename (str) name of file to save to
       Returns str write to path
   """
-  directory = os.path.sep.join([file_id, str(index)])
+  directory = '/'.join([file_id, str(index)])
   if not os.path.exists(directory):
     os.makedirs(directory)
 
-  return os.path.sep.join([directory, filename])
+  return '/'.join([directory, filename])
 
 def process_scan(filepath):
   """
@@ -525,12 +534,12 @@ def process_scan(filepath):
   file_id = '{}-{}'.format(filename, filehash)
 
   # Create directory
-  directory = os.path.sep.join([WRITE_DIRECTORY, file_id])
+  directory = '/'.join([WRITE_DIRECTORY, file_id])
   if not os.path.exists(directory):
     os.makedirs(directory)
 
   # Copy source file to directory
-  copy_path = os.path.sep.join([directory, os.path.basename(filepath)])
+  copy_path = '/'.join([directory, os.path.basename(filepath)])
   if not os.path.exists(copy_path):
     shutil.copyfile(filepath, copy_path)
 
@@ -609,4 +618,4 @@ if __name__ == '__main__':
   if os.path.isdir(sys.argv[1]):
     process_dir(sys.argv[1])
   else:
-    process_scan(os.path.abspath(sys.argv[1]))
+    process_scan(sys.argv[1])
