@@ -47,6 +47,7 @@ class CurriculumScanner(object):
     file_id = get_hash(path)
     filename, _ext = os.path.splitext(os.path.basename(self.path))
     self.directory = "{}-{}".format(filename, file_id)
+    self.index_dir = os.path.sep.join([WRITE_DIRECTORY, self.directory])
     self.pages = self.load()
 
   @classmethod
@@ -64,7 +65,7 @@ class CurriculumScanner(object):
         Args: None
         Returns dict of index.json data
     """
-    index_path = '/'.join([WRITE_DIRECTORY, self.directory, 'index.json'])
+    index_path = os.path.sep.join([self.index_dir, 'index.json'])
     if not os.path.exists(index_path):
       raise RuntimeError('index.json file not found for {}. Please run CurriculumScanner.process(filepath) and try again'.format(self.path))
     with open(index_path, 'rb') as fobj:
@@ -76,7 +77,8 @@ class CurriculumScanner(object):
         Args: page_number (int) page to read data from
         Returns dict of page data
     """
-    with open(self.pages[page_number]['file'], 'rb') as fobj:
+
+    with open(os.path.join(self.index_dir, self.pages[page_number]['file']), 'rb') as fobj:
       return json.load(fobj)
 
   def get_page_image(self, page_number):
@@ -85,7 +87,7 @@ class CurriculumScanner(object):
         Args: page_number (int) page to get image for
         Returns PIL.Image for page
     """
-    return Image.open(self.pages[page_number]['image'])
+    return Image.open(os.path.join(self.index_dir, self.pages[page_number]['image']))
 
 
   def get_next_page(self):
@@ -186,9 +188,8 @@ class CurriculumScanner(object):
       Paragraphs = blue
       Words = yellow
     """
-    filepath = self.pages[page_number]['image']
     page_data = self.get_page_data(page_number)
-    image = Image.open(filepath)
+    image = self.get_page_image(page_number)
     for page in page_data['pages']:
       for block in page['blocks']:
         for paragraph in block['paragraphs']:
@@ -205,10 +206,12 @@ class CurriculumScanner(object):
     return image
 
 
-  def find_text_matches(self, text):
+  def find_text_matches(self, text, fuzzy=False, search_threshold=SEARCH_THRESHOLD):
     """
-      Finds all fuzzy matches of text across pages (SEARCH_THRESHOLD can be updated in config.py)
-        Args: text (str) to find across pages
+      Finds all matches of `text` across pages, blocks, paragraph, and words.
+      If fuzzy is set to True, will use fuzzy matching for word level.
+      Returns either a paragraph or a word match.
+          Args: text (str) to find across pages
         Returns list of all instances a match was found
 
       Sample data:
@@ -218,10 +221,7 @@ class CurriculumScanner(object):
             "block": int,
             "paragraph": int,
             "word": int,
-            "bounds": [
-              {"x": int, "y": int},
-              ...
-            ]
+            "bounding_box": vertices[4],
           }
         ]
     """
@@ -233,19 +233,27 @@ class CurriculumScanner(object):
       for _, page in enumerate(page_data['pages']):
         for block_index, block in enumerate(page['blocks']):
           for paragraph_index, paragraph in enumerate(block['paragraphs']):
+            word_found = False
             for word_index, word in enumerate(paragraph['words']):
-
               # Attempt to match word with given text
-              ratio = fuzz.token_set_ratio(text, word['text'])
-              if ratio > SEARCH_THRESHOLD:
+              ratio = fuzz.ratio(text, word['text'])
+              if text == word or (fuzzy and ratio > search_threshold):
+                word_found = True
                 results.append({
                   "page": page_number,
                   "block": block_index,
                   "paragraph": paragraph_index,
                   "word": word_index,
-                  "bounds": word['bounding_box']['vertices']
+                  "bounding_box": word['bounding_box']
                 })
-
+            if not word_found and text in paragraph['text']:
+                print("paragraph text = {}".format(paragraph['text']))
+                results.append({
+                  "page": page_number,
+                  "block": block_index,
+                  "paragraph": paragraph_index,
+                  "bounding_box": paragraph['bounding_box']
+                })
     return results
 
   def find_regex_matches(self, regex):
