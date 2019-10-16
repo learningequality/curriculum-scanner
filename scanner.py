@@ -1,6 +1,8 @@
 from enum import Enum
 import json
 import os
+import re
+
 from fuzzywuzzy import fuzz
 from process_scans import get_hash, process_scan
 from PIL import Image, ImageDraw
@@ -8,7 +10,6 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from config import StructureType
 from config import SEARCH_THRESHOLD, WRITE_DIRECTORY, BLOCK_BORDER_THICKNESS, COLUMN_DETECTION_THRESHOLD
-
 
 # Google break type structures
 class BreakType(Enum):
@@ -63,7 +64,7 @@ class CurriculumScanner(object):
         Args: None
         Returns dict of index.json data
     """
-    index_path = os.path.sep.join([WRITE_DIRECTORY, self.directory, 'index.json'])
+    index_path = '/'.join([WRITE_DIRECTORY, self.directory, 'index.json'])
     if not os.path.exists(index_path):
       raise RuntimeError('index.json file not found for {}. Please run CurriculumScanner.process(filepath) and try again'.format(self.path))
     with open(index_path, 'rb') as fobj:
@@ -246,6 +247,61 @@ class CurriculumScanner(object):
                 })
 
     return results
+
+  def find_regex_matches(self, regex):
+    """
+      Finds all fuzzy matches of text across pages (SEARCH_THRESHOLD can be updated in config.py)
+        Args: text (str) to find across pages
+        Returns list of all instances a match was found
+
+      Sample data:
+        [
+          {
+            "page": int,
+            "block": int,
+            "paragraph": int,
+            "word": int,
+            "bounds": [
+              {"x": int, "y": int},
+              ...
+            ]
+          }
+        ]
+    """
+
+    # Go through all the pages in index.json
+    results = []
+    for page_number, _data in enumerate(self.pages):
+      page_data = self.get_page_data(page_number)
+      for _, page in enumerate(page_data['pages']):
+        for block_index, block in enumerate(page['blocks']):
+          for paragraph_index, paragraph in enumerate(block['paragraphs']):
+            word_found = False
+
+            for word_index, word in enumerate(paragraph['words']):
+              # Attempt to match word with given text
+              if re.search(regex, word['text']):
+                word_found = True
+                results.append({
+                  "page": page_number,
+                  "block": block_index,
+                  "paragraph": paragraph_index,
+                  "word": word_index,
+                  "bounds": word['bounding_box']['vertices'],
+                  "text": word['text']
+                })
+
+            if not word_found and re.search(regex, paragraph['text']):
+              results.append({
+                "page": page_number,
+                "block": block_index,
+                "paragraph": paragraph_index,
+                "bounds": paragraph['bounding_box']['vertices'],
+                "text": paragraph['text']
+              })
+
+    return results
+
 
 
   def detect_columns(self, page_number):
