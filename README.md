@@ -127,7 +127,7 @@ This will return a list of where each match is found
 ```
 
 #### find_regex_matches
-If you would like to find where a regex appears across the pages, you can use the `scanner.find_text_matches(text)` method.
+If you would like to find where a regex appears across the pages, you can use the `scanner.find_regex_matches(regex)` method.
 
 ```
 	matches = scanner.find_text_matches(r'\d+\.\d+\.\d+\.')
