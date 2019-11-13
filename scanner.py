@@ -78,7 +78,10 @@ class CurriculumScanner(object):
         Returns dict of page data
     """
 
-    with open(os.path.join(self.pages[page_number]['file']), 'rb') as fobj:
+    filepath = self.pages[page_number]['file']
+    if not os.path.exists(filepath):
+      filepath = os.path.join(os.getcwd(), filepath)
+    with open(filepath, 'rb') as fobj:
       return json.load(fobj)
 
   def get_page_image(self, page_number):
@@ -87,7 +90,10 @@ class CurriculumScanner(object):
         Args: page_number (int) page to get image for
         Returns PIL.Image for page
     """
-    return Image.open(os.path.join(self.pages[page_number]['image']))
+    filepath = self.pages[page_number]['image']
+    if not os.path.exists(filepath):
+      filepath = os.path.join(os.getcwd(), filepath)
+    return Image.open(filepath)
 
 
   def get_next_page(self):
@@ -247,7 +253,6 @@ class CurriculumScanner(object):
                   "bounding_box": word['bounding_box']
                 })
             if not word_found and text in paragraph['text']:
-                print("paragraph text = {}".format(paragraph['text']))
                 results.append({
                   "page": page_number,
                   "block": block_index,
@@ -378,3 +383,40 @@ class CurriculumScanner(object):
           ranges.append((x_range['x0'], x_range['x1']))
 
     return ranges
+
+
+  def rearrange_multi_column_text_blocks(self, page_num, column_starts, dimension='x'):
+    """
+    For pages with multi-column text, the blocks will be arranged from top to bottom and
+    left to right page position rather than according to their columns.
+
+    This uses column start values to return the text in the order that the user would
+    naturally read the text.
+
+    :param page_data: Data structure for a particular page of text
+    :param columns: a list of start values in ascending order (e.g. [0, 300, 600, 900])
+    :return: The blocks arranged according to the document's proper reading order
+    """
+    page_data = self.get_page_data(page_num)
+    num_blocks = len(page_data['pages'][0]['blocks'])
+    columns = []
+    num_columns = len(column_starts)
+    for _acolumn in range(num_columns):
+      columns.append([])
+    for index in range(num_blocks):
+      block = page_data['pages'][0]['blocks'][index]
+
+      start = block['bounding_box']['vertices'][0][dimension]
+      for column in range(num_columns):
+        column_start = column_starts[column]
+        if start >= column_start and (column == num_columns - 1 or start < column_starts[column+1]):
+          columns[column].append(block)
+          # print("Column = {}".format(column))
+          break
+
+    blocks = []
+    for column in columns:
+      for ablock in column:
+        blocks.append(ablock)
+
+    return blocks

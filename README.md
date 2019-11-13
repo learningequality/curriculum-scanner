@@ -69,8 +69,7 @@ If you would like to see each structure's bounds, a visual guide has been genera
 * Words = yellow
 
 ##### Accessing the data
-To access this data, you can use the `scanner.get_page_data(page number)` method. Alternatively, if you are iterating through the pages, you can use the `scanner.get_page_data()` function.
-
+To access this data, you can use the `scanner.get_page_data(page number)` method. Alternatively, if you are iterating through the pages, you can use the `scanner.get_next_page()` function.
 ```
 for page in scanner.get_next_page():
     # Do something with page data
