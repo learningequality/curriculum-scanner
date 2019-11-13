@@ -102,3 +102,6 @@ IMAGE_CONTRAST = 2
 
 # % matching characters to be included in the search results
 SEARCH_THRESHOLD = 90
+
+# Space between words for the first word in the line to be considered a bullet
+BULLET_THRESHOLD = 30
