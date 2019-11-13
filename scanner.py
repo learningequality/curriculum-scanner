@@ -92,7 +92,7 @@ class CurriculumScanner(object):
     """
     filepath = self.pages[page_number]['image']
     if not os.path.exists(filepath):
-      filepath = os.path.join(os.getcwd(), self.pages[page_number]['image'])
+      filepath = os.path.join(os.getcwd(), filepath)
     return Image.open(filepath)
 
 
