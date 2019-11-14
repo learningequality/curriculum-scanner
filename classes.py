@@ -1,4 +1,5 @@
 from config import BULLET_THRESHOLD
+import numpy as np
 
 class BoundingBox(object):
     def __init__(self, x1, y1, x2, y2):
@@ -134,8 +135,16 @@ class Line(object):
         return " ".join([word.text for word in self.words])
 
     def extract_bullet(self):
+        # Get average character width and use that to detect wider spaces
+        character_sizes = []
+        for word in self.words:
+            width = word.bounding_box.x2 - word.bounding_box.x1
+            char_size = width / len(word.text)
+            character_sizes.extend([char_size for _ in range(len(word.text))])
+
+        threshold = np.mean(character_sizes) * BULLET_THRESHOLD
         for index, word in enumerate(self.words[:-1]):
-            if self.words[index + 1].bounding_box.x1 - word.bounding_box.x2 > BULLET_THRESHOLD:
+            if self.words[index + 1].bounding_box.x1 - word.bounding_box.x2 > threshold:
                 bullet_words = self.words[:index + 1]
                 self.words = self.words[index + 1:]
                 return Word(
