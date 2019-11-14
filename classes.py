@@ -1,5 +1,6 @@
 from config import BULLET_THRESHOLD
 
+
 class BoundingBox(object):
     def __init__(self, x1, y1, x2, y2):
         assert x1 < x2
@@ -21,7 +22,7 @@ class BoundingBox(object):
         y1 = max(self.y1, other.y1)
         x2 = min(self.x2, other.x2)
         y2 = min(self.y2, other.y2)
-        if x2 < x1 or y2 < y1:
+        if (x2 <= x1) or (y2 <= y1):
             return None
         return BoundingBox(x1, y1, x2, y2)
 
@@ -33,11 +34,18 @@ class BoundingBox(object):
         y2 = max(self.y2, other.y2)
         return BoundingBox(x1, y1, x2, y2)
 
-    def overlap(self, other):
+    def overlap(self, other, axis="both"):
         """
         Calculate the Intersection over Union (IoU) of two bounding boxes.
         Adapted from: https://stackoverflow.com/questions/25349178/calculating-percentage-of-bounding-box-overlap-for-image-detector-evaluation
         """
+        assert axis in ["both", "x", "y"], "`axis` must be one of 'both', 'x', or 'y'"
+        if axis == "x":
+            self = BoundingBox(self.x1, 0, self.x2, 1)
+            other = BoundingBox(other.x1, 0, other.x2, 1)
+        elif axis == "y":
+            self = BoundingBox(0, self.y1, 1, self.y2)
+            other = BoundingBox(0, other.y1, 1, other.y2)
 
         intersection = self & other
         if intersection is None:
@@ -47,6 +55,18 @@ class BoundingBox(object):
         # compute the intersection over union by taking the intersection area and dividing it
         # by the sum of the two areas minus the intersection area
         return intersection_area / float(self.area() + other.area() - intersection_area)
+
+    def __contains__(self, item):
+        intersection = self & item
+        if intersection is None:
+            return False
+        return item.overlap(intersection) > 0.8
+
+    def __str__(self):
+        return "({}, {})/({}, {})".format(self.x1, self.y1, self.x2, self.y2)
+
+    def __repr__(self):
+        return "<BoundingBox: {}>".format(str(self))
 
 
 class BoundingBoxSet(list):
@@ -91,6 +111,19 @@ class BoundingBoxSet(list):
                 results.append(box_a)
         return results
 
+    def __contains__(self, item):
+        for box in self:
+            if box in item and item in box:
+                return True
+        return False
+
+    def deduplicate(self):
+        unique = BoundingBoxSet([], overlap_threshold=self.overlap_threshold)
+        for box in self:
+            if box not in unique:
+                unique.append(box)
+        return unique
+
 
 class Word(object):
     """
@@ -98,12 +131,16 @@ class Word(object):
             text: string of characters
             bounding_box: BoundingBox object with coordinates for word
     """
+
     bounding_box = None
     text = ""
 
     def __init__(self, text, bounding_box):
         self.bounding_box = bounding_box
         self.text = text
+
+    def __repr__(self):
+        return '<Word: "{}" @ {}>'.format(self.text, str(self.bounding_box))
 
 
 class Line(object):
@@ -112,6 +149,7 @@ class Line(object):
             words: a list of Words
             fontweight: string for fontweight properties (bold | normal)
     """
+
     words = None
     fontweight = "normal"
 
@@ -127,7 +165,7 @@ class Line(object):
             min(word.bounding_box.x1 for word in self.words),
             min(word.bounding_box.y1 for word in self.words),
             max(word.bounding_box.x2 for word in self.words),
-            max(word.bounding_box.y2 for word in self.words)
+            max(word.bounding_box.y2 for word in self.words),
         )
 
     def get_text(self):
@@ -135,8 +173,11 @@ class Line(object):
 
     def extract_bullet(self):
         for index, word in enumerate(self.words[:-1]):
-            if self.words[index + 1].bounding_box.x1 - word.bounding_box.x2 > BULLET_THRESHOLD:
-                bullet_words = self.words[:index + 1]
+            if (
+                self.words[index + 1].bounding_box.x1 - word.bounding_box.x2
+                > BULLET_THRESHOLD
+            ):
+                bullet_words = self.words[: index + 1]
                 self.words = self.words[index:]
                 return Word(
                     " ".join([w.text for w in bullet_words]),
@@ -144,8 +185,8 @@ class Line(object):
                         min(word.bounding_box.x1 for word in bullet_words),
                         min(word.bounding_box.y1 for word in bullet_words),
                         max(word.bounding_box.x2 for word in bullet_words),
-                        max(word.bounding_box.y2 for word in bullet_words)
-                    )
+                        max(word.bounding_box.y2 for word in bullet_words),
+                    ),
                 )
 
 
@@ -153,7 +194,7 @@ class Item(object):
     lines = None
     bullet = None
 
-    def __init__(self, bullet, lines):
+    def __init__(self, lines, bullet=None):
         self.bullet = bullet
         self.lines = lines or []
 
@@ -174,3 +215,14 @@ class Item(object):
 
     def get_text(self, separator="\n"):
         return separator.join([line.get_text() for line in self.lines])
+
+
+class ItemList(list):
+    def get_box(self):
+        items = [item.get_box() for item in self]
+        return BoundingBox(
+            min(item.x1 for item in items),
+            min(item.y1 for item in items),
+            max(item.x2 for item in items),
+            max(item.y2 for item in items),
+        )
