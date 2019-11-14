@@ -25,6 +25,12 @@ BREAK_MAP = {
   BreakType.NEWLINE.value: '\n'
 }
 
+column_defaults = {
+  2: [0, 600],
+  4: [0, 300, 600, 900]
+}
+
+
 class BlockOrder(Enum):
   TOPBOTTOM = 0
   BOTTOMTOP = 1
@@ -100,7 +106,6 @@ class CurriculumScanner(object):
     """ Generator to iterate through pages """
     for page_number, page in self.pages:
       yield self.get_page_data(page_number)
-
 
   def get_blocks_by_order(self, page_number, order=BlockOrder.LEFTRIGHT):
     """
@@ -407,16 +412,51 @@ class CurriculumScanner(object):
       block = page_data['pages'][0]['blocks'][index]
 
       start = block['bounding_box']['vertices'][0][dimension]
+      end = block['bounding_box']['vertices'][2][dimension]
       for column in range(num_columns):
         column_start = column_starts[column]
-        if start >= column_start and (column == num_columns - 1 or start < column_starts[column+1]):
+        is_close_to_column = abs(start - column_start) < 100
+
+        if is_close_to_column or column == num_columns - 1:
           columns[column].append(block)
-          # print("Column = {}".format(column))
+          print("start = {}".format(start))
+          print("text = {}".format(block['text']))
+          print("Column = {}".format(column))
           break
 
     blocks = []
     for column in columns:
       for ablock in column:
         blocks.append(ablock)
+
+    return blocks
+
+  def get_lines_for_blocks(self, page_number, columns=None):
+    if columns:
+      columns_list = columns
+      if isinstance(columns, int):
+        columns_list = column_defaults[columns]
+      blocks = self.rearrange_multi_column_text_blocks(page_number, columns_list)
+    else:
+      page_data = self.get_page_data(page_number)
+      blocks = page_data['pages'][0]['blocks']
+    for block in blocks:
+      block['lines'] = []
+      current_line = []
+      for paragraph in block['paragraphs']:
+        prev_y = -1  # used for detecting line breaks
+        for word in paragraph['words']:
+          current_y = word['bounding_box']['vertices'][0]['y']
+          if prev_y == -1:
+            prev_y = current_y
+          if abs(current_y - prev_y) > 10:
+            if len(current_line) > 0:
+              block['lines'].append(current_line)
+              current_line = []
+          else:
+            current_line.append(word)
+          prev_y = current_y
+        if len(current_line) > 0:
+          block['lines'].append(current_line)
 
     return blocks
