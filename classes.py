@@ -137,7 +137,7 @@ class Line(object):
         for index, word in enumerate(self.words[:-1]):
             if self.words[index + 1].bounding_box.x1 - word.bounding_box.x2 > BULLET_THRESHOLD:
                 bullet_words = self.words[:index + 1]
-                self.words = self.words[index:]
+                self.words = self.words[index + 1:]
                 return Word(
                     " ".join([w.text for w in bullet_words]),
                     BoundingBox(
