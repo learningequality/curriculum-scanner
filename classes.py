@@ -178,7 +178,7 @@ class Line(object):
                 > BULLET_THRESHOLD
             ):
                 bullet_words = self.words[: index + 1]
-                self.words = self.words[index:]
+                self.words = self.words[index + 1 :]
                 return Word(
                     " ".join([w.text for w in bullet_words]),
                     BoundingBox(
