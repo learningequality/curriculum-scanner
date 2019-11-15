@@ -208,8 +208,8 @@ class Item(object):
     def set_bullet(self, bullet):
         self.bullet = bullet
 
-    def add_line(self, line):
-        self.lines.append(line)
+    def add_lines(self, lines):
+        self.lines.extend(lines)
 
     def get_box(self):
         lines = [line.get_box() for line in self.lines]
@@ -233,3 +233,19 @@ class ItemList(list):
             max(item.x2 for item in items),
             max(item.y2 for item in items),
         )
+
+    def add_item(self, item):
+        if item.lines:
+            self.append(item)
+
+    def combine_lines(self):
+        new_items = ItemList([])
+        current_item = Item([])
+        for item in self:
+            if item.bullet:
+                new_items.add_item(current_item)
+                current_item = Item([], bullet=item.bullet)
+            current_item.add_lines(item.lines)
+
+        new_items.add_item(current_item)
+        return new_items
