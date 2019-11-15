@@ -1,5 +1,6 @@
 from config import BULLET_THRESHOLD
 from functools import reduce
+import numpy as np
 
 
 class BoundingBox(object):
@@ -181,11 +182,17 @@ class Line(object):
         return " ".join([word.text for word in self.words])
 
     def extract_bullet(self):
+        # Get average character width and use that to detect wider spaces
+        character_sizes = []
+        for word in self.words:
+            width = word.bounding_box.x2 - word.bounding_box.x1
+            char_size = width / len(word.text)
+            character_sizes.extend([char_size for _ in range(len(word.text))])
+
+        threshold = np.mean(character_sizes) * BULLET_THRESHOLD
         for index, word in enumerate(self.words[:-1]):
-            if (
-                self.words[index + 1].bounding_box.x1 - word.bounding_box.x2
-                > BULLET_THRESHOLD
-            ):
+            space = self.words[index + 1].bounding_box.x1 - word.bounding_box.x2
+            if space > threshold:
                 bullet_words = self.words[: index + 1]
                 self.words = self.words[index + 1 :]
                 return Word(
@@ -210,8 +217,8 @@ class Item(object):
     def set_bullet(self, bullet):
         self.bullet = bullet
 
-    def add_line(self, line):
-        self.lines.append(line)
+    def add_lines(self, lines):
+        self.lines.extend(lines)
 
     def get_box(self):
         lines = [line.get_box() for line in self.lines]
@@ -235,3 +242,19 @@ class ItemList(list):
             max(item.x2 for item in items),
             max(item.y2 for item in items),
         )
+
+    def add_item(self, item):
+        if item.lines:
+            self.append(item)
+
+    def combine_lines(self):
+        new_items = ItemList([])
+        current_item = Item([])
+        for item in self:
+            if item.bullet:
+                new_items.add_item(current_item)
+                current_item = Item([], bullet=item.bullet)
+            current_item.add_lines(item.lines)
+
+        new_items.add_item(current_item)
+        return new_items
