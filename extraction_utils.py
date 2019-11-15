@@ -1,5 +1,8 @@
 import cv2
 import numpy as np
+import scipy
+from scipy.signal import argrelextrema
+from matplotlib import pyplot as plt
 
 from classes import BoundingBox, BoundingBoxSet, Word, Line, Item, ItemList
 
@@ -28,15 +31,20 @@ def get_bullets_by_template(img_rgb):
     ]
 
 
+def vertices_to_bounding_box(vertices):
+    x1 = min(v["x"] for v in vertices)
+    y1 = min(v["y"] for v in vertices)
+    x2 = max(v["x"] for v in vertices)
+    y2 = max(v["y"] for v in vertices)
+    return BoundingBox(x1, y1, x2, y2)
+
+
 def extract_word_list(page_data):
     for page in page_data["pages"]:
         for block in page["blocks"]:
             for paragraph in block["paragraphs"]:
                 for word in paragraph["words"]:
-                    topleft, _, bottomright, _ = word["bounding_box"]["vertices"]
-                    box = BoundingBox(
-                        topleft["x"], topleft["y"], bottomright["x"], bottomright["y"]
-                    )
+                    box = vertices_to_bounding_box(word["bounding_box"]["vertices"])
                     yield Word(
                         text="".join([s["text"] for s in word["symbols"]]),
                         bounding_box=box,
@@ -97,3 +105,60 @@ def extract_single_line_items_from_column(page_data, column_box=None, bullets=[]
     return ItemList(
         [Item(lines=[Line(words=cluster["words"])]) for cluster in clusters]
     )
+
+
+def smooth(x, window_len):
+    s = np.r_[x[window_len - 1 : 0 : -1], x, x[-1:-window_len:-1]]
+    w = np.hanning(window_len)
+    y = np.convolve(w / w.sum(), s, mode="valid")
+    return y
+
+
+def determine_column_bounding_boxes(
+    page_data, smoothing_granularity=6, plot_density=False
+):
+    words = list(extract_word_list(page_data))
+    wordboxes = BoundingBoxSet([word.bounding_box for word in words])
+    outer = wordboxes.get_outer_box()
+
+    width = outer.width()
+    height = outer.height()
+    start_x = outer.x1
+    end_x = outer.x2
+
+    raw_intersections = np.zeros(outer.x2)
+
+    for x in range(start_x, end_x):
+        divider_box = BoundingBox(x - 1, 0, x + 1, height)
+        raw_intersections[x] = len(
+            [box for box in wordboxes if divider_box.overlap(box)]
+        )
+
+    window_len = int(width / smoothing_granularity)
+    intersections = smooth(raw_intersections, window_len=window_len)[
+        int(window_len / 2) : -int(window_len / 2)
+    ]
+
+    boundaries = scipy.signal.find_peaks(-intersections)[0]
+    boundaries = (
+        [start_x]
+        + [ind for ind in boundaries if ind > start_x and ind < end_x]
+        + [end_x]
+    )
+
+    if plot_density:
+        plt.plot(intersections)
+        plt.plot(raw_intersections)
+        plt.rcParams["figure.figsize"] = (15, 2)
+        plt.show()
+
+    columns = []
+    for i in range(len(boundaries) - 1):
+        columnbox = BoundingBox(boundaries[i], outer.y1, boundaries[i + 1], outer.y2)
+        columnwords = BoundingBoxSet([])
+        for wordbox in wordboxes:
+            if wordbox in columnbox:
+                columnwords.append(wordbox)
+        columns.append(columnwords.get_outer_box())
+
+    return columns

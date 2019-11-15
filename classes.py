@@ -1,8 +1,11 @@
 from config import BULLET_THRESHOLD
+from functools import reduce
 
 
 class BoundingBox(object):
     def __init__(self, x1, y1, x2, y2):
+        if x1 >= x2:
+            print(x1, y1, x2, y2)
         assert x1 < x2
         assert y1 < y2
         self.x1 = x1
@@ -14,7 +17,13 @@ class BoundingBox(object):
         return (self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2
 
     def area(self):
-        return (self.x2 - self.x1) * (self.y2 - self.y1)
+        return self.width() * self.height()
+
+    def width(self):
+        return self.x2 - self.x1
+
+    def height(self):
+        return self.y2 - self.y1
 
     def __and__(self, other):
         # returns the intersection of the bounding boxes
