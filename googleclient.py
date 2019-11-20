@@ -173,16 +173,20 @@ class GoogleDriveClient(object):
 
     return results
 
-  def write_csv_from_structure(self, structure, title, metadata=None):
+  def write_csv_from_structure(self, structure, title, metadata=None, sheet=None):
     spreadsheet_service = build('sheets', 'v4', credentials=self.credentials)
     metadata = metadata or {}
-    data = {
-      'name': title,
-      'mimeType': 'application/vnd.google-apps.spreadsheet',
-      'parents': [SPREADSHEET_FOLDER]
-    }
-    spreadsheet = self.service.files().create(body=data, fields='id').execute()
-    self.set_permission(spreadsheet['id'])
+
+    if not sheet:
+      data = {
+        'name': title,
+        'mimeType': 'application/vnd.google-apps.spreadsheet',
+        'parents': [SPREADSHEET_FOLDER]
+      }
+      spreadsheet = self.service.files().create(body=data, fields='id').execute()
+      self.set_permission(spreadsheet['id'])
+    else:
+      spreadsheet = {'id': sheet}
     sheets = spreadsheet_service.spreadsheets().get(spreadsheetId=spreadsheet['id']).execute()['sheets']
     existing_sheets = [sheet['properties']['sheetId'] for sheet in sheets]
 
@@ -210,9 +214,8 @@ class GoogleDriveClient(object):
       values.append(create_row([]))
       values.append([create_row(headers)])
 
-      chunks = [structure[x:x+500] for x in range(0, len(structure), 500)]
-      for sheetId, chunk in enumerate(chunks):
-        values.extend([create_row(['#' * item.indent, item.identifier, item.type, item.text, '', item.notes]) for item in chunk])
+      for item in subject_structure:
+        values.append(create_row(['#' * item.indent, item.identifier, item.type, item.text, '', item.notes]))
 
       append_cells_request = {
         'appendCells': {
@@ -230,10 +233,10 @@ class GoogleDriveClient(object):
     } for sheetId in existing_sheets]
     response = spreadsheet_service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet['id'], body={'requests': delete_requests}).execute()
 
-  def parse_document(self, file_id, title, metadata=None):
+  def parse_document(self, file_id, title, metadata=None, sheet=None):
     doc = self.get_doc(file_id)
     structure = self.convert_html_to_structure(doc.read())
-    self.write_csv_from_structure(structure, title, metadata=metadata)
+    self.write_csv_from_structure(structure, title, metadata=metadata, sheet=sheet)
     return structure
 
 def create_row(values):
