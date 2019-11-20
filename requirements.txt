@@ -14,3 +14,4 @@ opencv-python==4.1.1.26
 google-api-python-client==1.7.11
 google-auth-httplib2==0.0.3
 google-auth-oathlib==0.4.1
+beautifulsoup4==4.8.1
