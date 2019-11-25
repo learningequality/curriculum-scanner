@@ -9,52 +9,54 @@ from enum import Enum
 ###############################################################################
 
 SYMBOL_STRUCTURE = {
-  'name': 'symbols',
-  'fields': ['confidence', 'text'],
-  'objects': ['bounding_box', 'property']
+    "name": "symbols",
+    "fields": ["confidence", "text"],
+    "objects": ["bounding_box", "property"],
 }
 
 WORD_STRUCTURE = {
-  'name': 'words',
-  'fields': ['confidence'],
-  'objects': ['bounding_box', 'property'],
-  'list': SYMBOL_STRUCTURE
+    "name": "words",
+    "fields": ["confidence"],
+    "objects": ["bounding_box", "property"],
+    "list": SYMBOL_STRUCTURE,
 }
 
 PARAGRAPH_STRUCTURE = {
-  'name': 'paragraphs',
-  'fields': ['confidence'],
-  'objects': ['bounding_box', 'property'],
-  'list': WORD_STRUCTURE
+    "name": "paragraphs",
+    "fields": ["confidence"],
+    "objects": ["bounding_box", "property"],
+    "list": WORD_STRUCTURE,
 }
 
 BLOCK_STRUCTURE = {
-  'name': 'blocks',
-  'fields': ['block_type', 'confidence'],
-  'objects': ['bounding_box', 'property'],
-  'list': PARAGRAPH_STRUCTURE
+    "name": "blocks",
+    "fields": ["block_type", "confidence"],
+    "objects": ["bounding_box", "property"],
+    "list": PARAGRAPH_STRUCTURE,
 }
 
 PAGE_STRUCTURE = {
-  'name': 'pages',
-  'fields': ['confidence', 'height', 'width'],
-  'objects': ['property'],
-  'list': BLOCK_STRUCTURE
+    "name": "pages",
+    "fields": ["confidence", "height", "width"],
+    "objects": ["property"],
+    "list": BLOCK_STRUCTURE,
 }
 
 STRUCTURE = {
-  'name': 'overall',
-  'fields': ['text'],
-  'objects': [],
-  'list': PAGE_STRUCTURE
+    "name": "overall",
+    "fields": ["text"],
+    "objects": [],
+    "list": PAGE_STRUCTURE,
 }
 
+
 class StructureType(Enum):
-  PAGE = 1
-  BLOCK = 2
-  PARA = 3
-  WORD = 4
-  SYMBOL = 5
+    PAGE = 1
+    BLOCK = 2
+    PARA = 3
+    WORD = 4
+    SYMBOL = 5
+
 
 ###############################################################################
 #
@@ -66,16 +68,16 @@ class StructureType(Enum):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Directory containing curriculum PDF source files to be scanned.
-INPUT_DIRECTORY = os.path.join(BASE_DIR, 'inputs')
+INPUT_DIRECTORY = os.path.join(BASE_DIR, "inputs")
 
 # Director where structued OCR outputs are stored.
-WRITE_DIRECTORY = 'scans'
+WRITE_DIRECTORY = "scans"
 
 # Allowed formats for processing
-ALLOWED_FORMATS = ['.pdf', '.png', '.jpg', '.jpeg']
+ALLOWED_FORMATS = [".pdf", ".png", ".jpg", ".jpeg"]
 
 # Path to credentials json for Google Vision API
-CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials', 'client_secret.json')
+CREDENTIALS_PATH = os.path.join(BASE_DIR, "credentials", "client_secret.json")
 
 # Minimum number of characters to use to determine text orientation
 #  - Higher = better chance of correct orientation detection
@@ -105,4 +107,4 @@ SEARCH_THRESHOLD = 90
 
 # Multiplier for how big a space should be to be considered a bullet
 # (bullet detected if space > average character size * threshold)
-BULLET_THRESHOLD = 1.5
+BULLET_THRESHOLD = 2

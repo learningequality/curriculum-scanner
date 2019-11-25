@@ -134,7 +134,11 @@ def smooth(x, window_len):
 
 
 def determine_column_bounding_boxes(
-    page_data, smoothing_granularity=6, plot_density=False, **kwargs
+    page_data,
+    smoothing_granularity=6,
+    plot_density=False,
+    left_shift_fraction=0.01,
+    **kwargs
 ):
     words = list(extract_word_list(page_data))
     wordboxes = BoundingBoxSet([word.bounding_box for word in words])
@@ -168,12 +172,16 @@ def determine_column_bounding_boxes(
         + [end_x]
     )
 
+    # shift boundaries left slightly
+    left_shift_amount = page_width * left_shift_fraction
+    boundaries = [boundary - left_shift_amount for boundary in boundaries]
+
     # use these boundaries to create bounding boxes for the columns
     columnboxes = BoundingBoxSet([])
     for i in range(len(boundaries) - 1):
         columnbox = BoundingBox(
             boundaries[i], outer.y1, boundaries[i + 1], outer.y2
-        ).expanded(0.02, axis="x")
+        )  # .expanded(0.02, axis="x")
         columnboxes.append(columnbox)
 
     # get "block" boxes from original OCR data, and identify blocks not fitting in columns
