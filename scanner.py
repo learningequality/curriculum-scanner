@@ -155,6 +155,13 @@ class CurriculumScanner(object):
         blocks.extend(sorted(page['blocks'], key=lambda b: min(v['x'] for v in b['bounding_box']['vertices'])))
     return blocks
 
+  def contains_element(self, x0, y0, x1, y1, element):
+    min_x = min([v['x'] for v in element['bounding_box']['vertices']])
+    max_x = max([v['x'] for v in element['bounding_box']['vertices']])
+    min_y = min([v['y'] for v in element['bounding_box']['vertices']])
+    max_y = max([v['y'] for v in element['bounding_box']['vertices']])
+    return (min_x >= x0 and max_x <= x1 and min_y >= y0 and max_y <= y1)
+
   def text_within(self, page_number, x0=0, y0=0, x1=None, y1=None):
     """
       Finds all text inside a given boundary
@@ -179,13 +186,33 @@ class CurriculumScanner(object):
         for paragraph in block['paragraphs']:
           for word in paragraph['words']:
             for symbol in word['symbols']:
-              min_x=min([v['x'] for v in symbol['bounding_box']['vertices']])
-              max_x=max([v['x'] for v in symbol['bounding_box']['vertices']])
-              min_y=min([v['y'] for v in symbol['bounding_box']['vertices']])
-              max_y=max([v['y'] for v in symbol['bounding_box']['vertices']])
-              if(min_x >= x0 and max_x <= x1 and min_y >= y0 and max_y <= y1):
+              if self.contains_element(x0, y0, x1, y1, symbol):
                 text += symbol['text'] + (BREAK_MAP.get(symbol['property']['detected_break']['type']) or '')
     return text
+
+  def words_within(self, page_number, x0=0, y0=0, x1=None, y1=None):
+    """
+      Finds all word elements inside a given boundary
+        Args:
+          page_number (str) to find across pages
+          x0 (float) leftmost point for bounds [default: 0]
+          y0 (float) topmost point for bounds [default: 0]
+          x1 (float) rightmost point for bounds [default: width of page]
+          y1 (float) bottommost point for bounds [default: height of page]
+        Returns list of words contained by boundary
+    """
+    page_data = self.get_page_data(page_number)
+    x1 = x1 or page_data['pages'][0]['width']
+    y1 = y1 or page_data['pages'][0]['height']
+
+    words = []
+    for page in page_data['pages']:
+      for block in page['blocks']:
+        for paragraph in block['paragraphs']:
+          for word in paragraph['words']:
+            if self.contains_element(x0, y0, x1, y1, word):
+              words.append(word)
+    return words
 
   def draw_box(self, image, bound, color="red", padding=0):
     """
@@ -316,37 +343,63 @@ class CurriculumScanner(object):
     # Go through all the pages in index.json
     results = []
     for page_number, _data in enumerate(self.pages):
-      page_data = self.get_page_data(page_number)
-      for _, page in enumerate(page_data['pages']):
-        for block_index, block in enumerate(page['blocks']):
-          for paragraph_index, paragraph in enumerate(block['paragraphs']):
-            word_found = False
+      results.extend(self.find_regex_matches_in_page(page_number, regex))
 
-            for word_index, word in enumerate(paragraph['words']):
-              # Attempt to match word with given text
-              if re.search(regex, word['text']):
-                word_found = True
-                results.append({
-                  "page": page_number,
-                  "block": block_index,
-                  "paragraph": paragraph_index,
-                  "word": word_index,
-                  "bounds": word['bounding_box']['vertices'],
-                  "text": word['text']
-                })
+    return results
 
-            if not word_found and re.search(regex, paragraph['text']):
+  def find_regex_matches_in_page(self, page_number, regex):
+    """
+      Finds regex matches in a single page
+        Args: regex (regex) to find across pages
+        Returns list of all instances a match was found
+
+      Sample data:
+        [
+          {
+            "page": int,
+            "block": int,
+            "paragraph": int,
+            "word": int,
+            "text": str,
+            "bounds": [
+              {"x": int, "y": int},
+              ...
+            ]
+          }
+        ]
+    """
+
+    results = []
+    page_data = self.get_page_data(page_number)
+
+    for _, page in enumerate(page_data['pages']):
+      for block_index, block in enumerate(page['blocks']):
+        for paragraph_index, paragraph in enumerate(block['paragraphs']):
+          word_found = False
+
+          for word_index, word in enumerate(paragraph['words']):
+            # Attempt to match word with given text
+            if re.search(regex, word['text']):
+              word_found = True
               results.append({
                 "page": page_number,
                 "block": block_index,
                 "paragraph": paragraph_index,
-                "bounds": paragraph['bounding_box']['vertices'],
-                "text": paragraph['text']
+                "word": word_index,
+                "bounds": word['bounding_box']['vertices'],
+                "text": word['text']
               })
 
+          if not word_found and re.search(regex, paragraph['text']):
+            results.append({
+              "page": page_number,
+              "block": block_index,
+              "paragraph": paragraph_index,
+              "bounds": paragraph['bounding_box']['vertices'],
+              "text": paragraph['text']
+            })
+
     return results
-
-
 
   def detect_columns(self, page_number):
     """
