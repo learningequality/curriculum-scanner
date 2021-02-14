@@ -95,6 +95,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Directory containing curriculum PDF source files to be scanned.
 INPUT_DIRECTORY = os.path.join(BASE_DIR, "inputs")
 
+VISION_RESPONSE_DIRECTORY = os.path.join(BASE_DIR, 'vision')
+if not os.path.exists(VISION_RESPONSE_DIRECTORY):
+  os.makedirs(VISION_RESPONSE_DIRECTORY)
+
 # Director where structued OCR outputs are stored.
 WRITE_DIRECTORY = "scans"
 

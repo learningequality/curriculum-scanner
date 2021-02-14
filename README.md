@@ -194,3 +194,54 @@ For example, if the page has two columns, the data may look something like this:
 ```
 
 __Please note__: This code isn't guaranteed to work for all pages
+
+
+
+
+
+## Chunked workflow
+In order to simplify the curriculum digitization process, we'll split the scanned
+documents into individual chunks that can later be digitized via crowdsourcing.
+
+
+#### Create the folder hierarchy for the document
+
+    Document / Chapter / Section / Topic /
+    e.g. 
+    KICDvolumeII_KICD secondary curriculum volume II/01_Mathematics/01_Form One/13.0.0/
+
+  - Place the source document PDF in `Document/inputs/` directory
+  - Each name consists of a short identifier followed by `_` followed by the title.
+  - Directories for Chapter and Section must be manually created
+  - For KICD topics directories the helper script `mkKICDtopics.py` can be used
+    e.g. `mkKICDtopics.py --first=1 --last=23` to create sequentially numbered
+    empty folders `1.0.0` through `23.0.0`
+
+
+#### Manually extract the chunks for topic document
+
+  - Using a PDF tool (Preview on Mac) select a region that contains a given topic
+    and save to a separate chunk file, placing it in the appropriate Topic/ dir
+  - Repeat for remaining chunks from the topic (make sure sequentially numbered)
+
+
+#### Rename and convert PDF chunks into PNG format
+Run the following script:
+
+    ./scripts/renameandconvertfiles.py  --recursive="chunkedscans/KICDvolumeII_KICD secondary curriculum volume II"
+
+  - This will rename all PDFs found in the topic dirs into standard, sequential filenames
+  - Every PDF will be converted to high-res PNG (for OCR) and low-res PNG (for display in UI)
+
+
+#### Process chunks using OCR
+Next we run all the chunks through the Cloud Vision API to extract the text:
+
+    ./scripts/process_chunks.py  --recursive="chunkedscans/KICDvolumeII_KICD secondary curriculum volume II"
+
+This step will produce the following outputs:
+  - `{ch}_{sec}_{topic}_chunk{chunkid}_ocr.json` with detailed OCR information
+    that includes text and positions
+  - `{ch}_{sec}_{topic}_chunk{chunkid}_ocr.txt` the text extracted from individual chunks
+  - `{ch}_{sec}_{topic}_combined.txt` for the text from the whole topic
+

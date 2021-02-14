@@ -57,11 +57,8 @@ from config import INPUT_DIRECTORY
 from config import ORIENTATION_DETECTION_THRESHOLD
 from config import STRUCTURE
 from config import WRITE_DIRECTORY
+from config import VISION_RESPONSE_DIRECTORY
 
-
-VISION_RESPONSE_DIRECTORY = 'vision'
-if not os.path.exists(VISION_RESPONSE_DIRECTORY):
-  os.makedirs(VISION_RESPONSE_DIRECTORY)
 
 # Google break type structures
 class BreakType(Enum):
