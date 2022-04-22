@@ -1,5 +1,5 @@
 google-cloud-vision>=0.39.0
-pypdf2==1.26.0
+pypdf2==1.27.5
 pdf2image==1.9.0
 progress==1.5
 numpy>=1.17.2
